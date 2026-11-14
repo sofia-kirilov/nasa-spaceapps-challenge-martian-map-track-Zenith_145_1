@@ -1,30 +1,645 @@
-﻿/* Buildless application: classic scripts also work over file://. */
-(() => {
-'use strict';
-const D=window.MarsData,$=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
-const state={route:[{...D.home}],adding:false,view:{x:0,y:0,w:1000,h:750}};
-function svg(tag,attrs,parent){const el=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));parent.appendChild(el);return el;}
-function inside(p,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[1]>p.y)!==(b[1]>p.y))&&(p.x<(b[0]-a[0])*(p.y-a[1])/(b[1]-a[1])+a[0]))c=!c;}return c;}
-function terrain(p){let slope=4,rad=.026,soft=false,names=[];D.zones.forEach(z=>{if(inside(p,z.points)){slope=Math.max(slope,z.slope||0);rad=z.radiation||rad;soft=soft||!!z.soft;if(z.slope||z.soft)names.push(z.name);}});return {slope,rad,soft,names};}
-function calculate(route){let distance=0,minutes=route.length>1?20:0,dose=0,hazards=new Set();for(let i=1;i<route.length;i++){const a=route[i-1],b=route[i],len=Math.hypot(b.x-a.x,b.y-a.y)*4,n=Math.max(1,Math.ceil(len/10));distance+=len;for(let j=0;j<n;j++){const t=(j+.5)/n,p={x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t},z=terrain(p),m=len/n/600*60*(1+z.slope/15)*(z.soft?1.45:1);minutes+=m;dose+=z.rad*m/60;z.names.forEach(v=>hazards.add(v));}const stop=b.stop||0;minutes+=stop;dose+=terrain(b).rad*stop/60;}
-const hours=minutes/60;return {distance,minutes,dose,hazards:[...hazards],reserves:[100-hours/8*100,100-hours/7.5*100,100-hours/7*100]};}
-function coords(p){return {lat:D.origin.lat+(480-p.y)*4/59158,lon:D.origin.lon+(p.x-715)*4/(59158*Math.cos(D.origin.lat*Math.PI/180))};}
-function coordText(p){const c=coords(p);return `${c.lat.toFixed(4)}° N · ${c.lon.toFixed(4)}° E`;}
-function thumb(i=0){return `<svg viewBox="0 0 300 130" preserveAspectRatio="xMidYMid slice" aria-label="Illustrative terrain, not rover photography"><defs><filter id="thumb${i}"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="4" seed="${i+8}"/><feDiffuseLighting surfaceScale="17" lighting-color="#b0a18a"><feDistantLight azimuth="240" elevation="30"/></feDiffuseLighting></filter></defs><rect width="300" height="130" filter="url(#thumb${i})"/><path d="M0 100L60 68 90 77 160 24 210 52 300 30V130H0" fill="#353b31" opacity=".3"/></svg>`;}
-D.layers.forEach(l=>{const div=document.createElement('div');div.className='layer';div.innerHTML=`<div class="layer-head"><input id="check-${l.id}" type="checkbox" checked><label for="check-${l.id}">${l.name}</label></div><small>${l.sub}</small><div class="slider-row"><input id="opacity-${l.id}" aria-label="${l.name} opacity" type="range" min="0" max="100" value="${l.opacity}"><output>${l.opacity}%</output></div>`;$('layerControls').append(div);const update=()=>{$(l.id).style.opacity=div.querySelector('input[type=checkbox]').checked?div.querySelector('input[type=range]').value/100:0;div.querySelector('output').value=div.querySelector('input[type=range]').value+'%';};div.addEventListener('input',update);update();});
-D.zones.forEach(z=>{svg('polygon',{points:z.points.map(p=>p.join(',')).join(' '),fill:z.layer==='slope'?'url(#hatch)':z.layer==='geology'?'#aac5a0':z.soft?'#daa54c':'#7ca6af',stroke:z.layer==='slope'?'#ed947d':z.layer==='geology'?'#c1d2af':'#e3be71','stroke-width':1.5,'stroke-dasharray':z.layer==='geology'?'5 5':'none'},$(z.layer));});
-for(let i=0;i<24;i++){let points=[];for(let y=0;y<=750;y+=15){const x=20+i*42+Math.sin(y/95+i*.21)*32+Math.sin(y/39+i*.3)*10;points.push(`${x},${y}`);}svg('polyline',{points:points.join(' '),fill:'none',stroke:'#ddd5b8','stroke-width':i%4===0?1.3:.5,opacity:i%4===0?.3:.16},$('contours'));}
-function inspect(t){$('drawerContent').innerHTML=`<div class="eyebrow">SCIENCE TARGET / ${t.id}</div><h2>${t.name}</h2><div class="drawer-meta">${t.unit}<br>${coordText(t)} · SCHEMATIC LOCATION<br>SIMULATED FIELD LOG · SOL ${t.sol}</div><div class="terrain-thumb">${thumb(+t.id+20)}<img class="context-photo" src="assets/jezero-delta.jpg" alt="Perseverance Mastcam-Z view of the Jezero delta; shared context image"><span>MASTCAM-Z / DELTA CONTEXT</span></div><h3>GEOLOGICAL CONTEXT</h3><p>${t.notes}</p><h3>SAMPLING OBJECTIVE</h3><p>${t.objective}</p><div class="drawer-meta">${t.instrument}<br>Estimated station time: ${t.stop} min</div><button class="primary" id="addTarget">＋ Add to traverse</button><a href="https://mars.nasa.gov/mars2020/multimedia/raw-images/" target="_blank" rel="noopener">Perseverance raw image gallery ↗</a><p class="reserve-note">NASA/JPL-Caltech/ASU/MSSS · PIA24485. Shared delta context photograph; not a live observation at this target. Gallery requires connectivity. Telemetry is simulated.</p>`;const photo=$('drawerContent').querySelector('.context-photo');photo.onerror=()=>{photo.remove();$('drawerContent').querySelector('.terrain-thumb span').textContent='OFFLINE TERRAIN ILLUSTRATION';};$('addTarget').onclick=()=>{addPoint(t);$('inspection').close();};$('inspection').showModal();}
-$('closeDrawer').onclick=()=>$('inspection').close();
-D.targets.forEach((t,i)=>{const g=svg('g',{class:'marker',tabindex:0,role:'button','aria-label':`Inspect ${t.name}`},$('markers'));svg('circle',{cx:t.x,cy:t.y,r:19,fill:'#172522','fill-opacity':.9,stroke:'#d2e6a5','stroke-width':1.5},g);svg('text',{x:t.x,y:t.y+4,'text-anchor':'middle'},g).textContent=t.id;svg('text',{x:t.x+26,y:t.y+4},g).textContent=t.name.toUpperCase();g.onclick=e=>{e.stopPropagation();inspect(t);};g.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(t);}};const card=document.createElement('button');card.className='target-card';card.innerHTML=`<div class="terrain-thumb">${thumb(i)}<span>0${i+1} / SCIENCE</span></div><div class="target-body"><small>${t.unit}</small><h3>${t.name} ↗</h3><p>${t.stop} MIN STATION · INSPECT</p></div>`;card.onclick=()=>inspect(t);$('targetCards').append(card);});
-const home=svg('g',{class:'marker'},$('markers'));svg('rect',{x:703,y:468,width:24,height:24,fill:'#d2e6a5',stroke:'#203528','stroke-width':3},home);svg('text',{x:735,y:484},home).textContent='HABITAT ARES';
-function addPoint(p){if(state.route.length>=60){$('mapHint').textContent='60-point route limit reached. Undo or clear to continue.';return;}state.route.push({...p,x:p.x,y:p.y,name:p.name||`Waypoint ${state.route.length}`,stop:p.stop||0});render();}
-function render(){const r=calculate(state.route);$('distance').innerHTML=`${(r.distance/1000).toFixed(2)} <small>km</small>`;$('duration').textContent=`${Math.floor(Math.ceil(r.minutes)/60)}h ${String(Math.ceil(r.minutes)%60).padStart(2,'0')}m / 6h budget`;$('pointCount').textContent=`${String(state.route.length).padStart(2,'0')} POINTS`;$('routeList').replaceChildren();state.route.forEach((p,i)=>{const li=document.createElement('li');li.innerHTML=`<b>${i===0?'⌂':String(i).padStart(2,'0')}</b><div>${p.name}<small>${i===0?'AIRLOCK / START':(p.stop?`${p.stop} MIN SCIENCE STOP`:'TRAVERSE POINT')}</small></div>`;$('routeList').append(li);});$('routeLine').replaceChildren();svg('polyline',{points:state.route.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:'#19251d','stroke-width':8},$('routeLine'));svg('polyline',{points:state.route.map(p=>`${p.x},${p.y}`).join(' '),fill:'none',stroke:'#d2e6a5','stroke-width':3,'stroke-dasharray':'8 5'},$('routeLine'));state.route.slice(1).forEach((p,i)=>{svg('circle',{cx:p.x,cy:p.y,r:7,fill:'#d2e6a5',stroke:'#283626','stroke-width':2},$('routeLine'));});$('budgets').innerHTML=['Oxygen','Battery','Cooling water'].map((name,i)=>`<div class="budget"><div><span>${name}</span><span>${Math.max(0,r.reserves[i]).toFixed(0)}%</span></div><div class="bar"><span style="width:${Math.max(0,r.reserves[i])}%;background:${r.reserves[i]<20?'#ed9678':'#d2e6a5'}"></span></div></div>`).join('');const alerts=[];r.hazards.forEach(h=>alerts.push(`<div class="alert danger">△ ${h}: ${h==='Exposed sandy terrain'?'elevated modeled dose / soft ground':'slope exceeds 15° mobility threshold'}.</div>`));if(r.minutes>360)alerts.push('<div class="alert danger">EVA exceeds the 6-hour planning limit.</div>');if(r.reserves.some(v=>v<20))alerts.push('<div class="alert danger">Suit consumable reserve below 20%. Shorten the traverse.</div>');if(state.route.length>1){const last=state.route.at(-1);if(Math.hypot(last.x-D.home.x,last.y-D.home.y)>1)alerts.push('<div class="alert">Open traverse: return to habitat is not included.</div>');else if(!r.hazards.length&&r.minutes<=360&&r.reserves.every(v=>v>=20))alerts.push('<div class="alert safe">✓ Closed route within modeled planning limits.</div>');alerts.push(`<div class="reserve-note">Modeled route dose: ${r.dose.toFixed(3)} mSv · O₂ burn 12.5%/h · battery 13.3%/h · cooling 14.3%/h.</div>`);}else alerts.push('<div class="alert safe">⌖ Ready to plan. Select a science target or add a waypoint.</div>');$('alerts').innerHTML=alerts.join('');$('undo').disabled=state.route.length===1;}
-$('addMode').onclick=()=>{state.adding=!state.adding;$('addMode').classList.toggle('selected',state.adding);$('addMode').setAttribute('aria-pressed',state.adding);$('map').classList.toggle('adding',state.adding);$('mapHint').textContent=state.adding?'＋ Click terrain to add · drag to pan · Escape to finish':'↖ Inspect a science target or add a route waypoint';};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.adding)$('addMode').click();});$('undo').onclick=()=>{if(state.route.length>1)state.route.pop();render();};$('clear').onclick=()=>{state.route=[{...D.home}];render();};$('returnHome').onclick=()=>{const last=state.route.at(-1);if(last.x!==D.home.x||last.y!==D.home.y)addPoint({...D.home,name:'Habitat / return'});};$('demo').onclick=()=>{state.route=[{...D.home},{...D.targets[1]},{...D.targets[0]},{...D.home,name:'Habitat / return'}];render();};
-function scaleBar(){const m=$('map').getScreenCTM();if(m){$('scale').style.width=(125*m.a)+'px';$('scale').textContent='500 m';}}window.addEventListener('resize',scaleBar);function setView(){const v=state.view;$('map').setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`);scaleBar();}
-function zoom(f){const v=state.view,w=Math.min(1600,Math.max(250,v.w*f)),h=w*.75;v.x+=(v.w-w)/2;v.y+=(v.h-h)/2;v.w=w;v.h=h;setView();}$('zoomIn').onclick=()=>zoom(.8);$('zoomOut').onclick=()=>zoom(1.25);$('resetView').onclick=()=>{state.view={x:0,y:0,w:1000,h:750};setView();};
-function mapPoint(e){const p=$('map').createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform($('map').getScreenCTM().inverse());}$('map').setAttribute('tabindex','0');$('map').addEventListener('keydown',e=>{const v=state.view,delta=v.w*.05;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter'].includes(e.key)){e.preventDefault();if(e.key==='Enter'&&state.adding){const p={x:v.x+v.w/2,y:v.y+v.h/2};if(p.x>=0&&p.x<=1000&&p.y>=0&&p.y<=750)addPoint(p);}if(e.key==='ArrowLeft')v.x-=delta;if(e.key==='ArrowRight')v.x+=delta;if(e.key==='ArrowUp')v.y-=delta;if(e.key==='ArrowDown')v.y+=delta;setView();}});let drag=null;$('map').addEventListener('pointerdown',e=>{if(e.target.closest('.marker'))return;drag={clientX:e.clientX,clientY:e.clientY,p:mapPoint(e),x:state.view.x,y:state.view.y,moved:false};$('map').setPointerCapture(e.pointerId);});$('map').addEventListener('pointermove',e=>{const p=mapPoint(e);$('coordinates').textContent=coordText(p);if(drag){if(Math.hypot(e.clientX-drag.clientX,e.clientY-drag.clientY)>5)drag.moved=true;if(drag.moved){state.view.x+=drag.p.x-p.x;state.view.y+=drag.p.y-p.y;setView();}}});$('map').addEventListener('pointerup',e=>{if(drag&&!drag.moved&&state.adding){const p=mapPoint(e);if(p.x>=0&&p.x<=1000&&p.y>=0&&p.y<=750)addPoint(p);}drag=null;});$('map').addEventListener('pointercancel',()=>drag=null);$('map').addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.9);},{passive:false});
-$('export').onclick=()=>{const result=calculate(state.route),blob=new Blob([JSON.stringify({title:'ARES Jezero EVA plan',disclaimer:'Educational simulation. Illustrative geometry; not flight-certified.',waypoints:state.route.map(p=>({...p,...coords(p)})),...result},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ares-eva-plan.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-const start=Date.now();function tick(){const elapsed=(Date.now()-start)/1000/1.02749,seconds=Math.floor(10*3600+42*60+8+elapsed)%86400;$('clock').textContent=`${String(Math.floor(seconds/3600)).padStart(2,'0')}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')} LMST`;$('temp').innerHTML=`${(-48.2+Math.sin(elapsed/100)*.6).toFixed(1)} <small>°C</small>`;$('pressure').innerHTML=`${Math.round(742+Math.sin(elapsed/80)*3)} <small>Pa</small>`;}setInterval(tick,1000);tick();render();scaleBar();
-window.Ares={calculate,terrain,inside,state};
+﻿/*
+ * app.js — the user interface. It wires the map, the plan panel and the live
+ * NASA feeds together. Numbers live in config.js, map content in marsData.js,
+ * route maths in planner.js, network calls in nasaApi.js.
+ *
+ * Sections, in order:
+ *   1. Helpers            5. Plan panel
+ *   2. State              6. Science stops (cards and inspection drawer)
+ *   3. Map                7. Site conditions
+ *   4. Route editing      8. Export and start-up
+ */
+(function () {
+  'use strict';
+
+  var config = ARES.config;
+  var data = ARES.data;
+  var api = ARES.api;
+  var waypoints = ARES.roverTraverse.waypoints;
+  var planner = ARES.createPlanner(config, waypoints);
+
+  /* ---------- 1. Helpers ---------- */
+
+  function $(id) { return document.getElementById(id); }
+
+  /** Create an element. `text` is set as plain text, so API strings are never run as HTML. */
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  function formatDuration(minutes) {
+    var total = Math.round(minutes);
+    return Math.floor(total / 60) + ' h ' + String(total % 60).padStart(2, '0') + ' min';
+  }
+
+  function formatKm(metres) { return (metres / 1000).toFixed(2) + ' km'; }
+
+  function formatCoords(lat, lon) { return lat.toFixed(4) + '° N · ' + lon.toFixed(4) + '° E'; }
+
+  function toStop(place) {
+    return { name: place.name, lat: place.lat, lon: place.lon, stopMin: place.stopMin || 0 };
+  }
+
+  /* ---------- 2. State ---------- */
+
+  var habitat = toStop(data.habitat);
+  var state = {
+    stops: [habitat],   // the plan, always starting at the habitat
+    adding: false,      // true while map clicks add waypoints
+    summary: null       // latest result of planner.summarize
+  };
+
+  /* ---------- 3. Map ---------- */
+
+  // Mars Trek tiles use a plain latitude/longitude grid. Leaflet's EPSG4326 grid
+  // matches it; swapping in the Mars radius makes distances and the scale bar correct.
+  var marsCrs = L.extend({}, L.CRS.EPSG4326, { R: config.mars.radiusM });
+
+  var map = L.map('map', {
+    crs: marsCrs,
+    center: config.map.center,
+    zoom: config.map.zoom,
+    minZoom: config.map.minZoom,
+    maxZoom: config.map.maxZoom
+  });
+  L.control.scale({ imperial: false }).addTo(map);
+  map.attributionControl.setPrefix('');
+  map.attributionControl.addAttribution('NASA/JPL-Caltech · Mars Trek · USGS');
+
+  var routeLayer = L.layerGroup().addTo(map);
+
+  /** Build one Leaflet tile layer from a marsData.tileLayers entry. */
+  function createTileLayer(layer, zIndex) {
+    var url = config.api.trekTiles + '/' + layer.id +
+      '/1.0.0/default/default028mm/{z}/{y}/{x}.' + layer.ext;
+    var options = {
+      tileSize: 256,
+      maxNativeZoom: layer.maxNativeZoom,
+      maxZoom: config.map.maxZoom,
+      opacity: layer.opacity / 100,
+      zIndex: zIndex,
+      noWrap: true
+    };
+    if (layer.bounds) {
+      options.bounds = [[layer.bounds[0], layer.bounds[1]], [layer.bounds[2], layer.bounds[3]]];
+    }
+    return L.tileLayer(url, options);
+  }
+
+  function tiltClass(tilt) {
+    if (tilt >= config.slope.cautionDeg) return 'steep';
+    if (tilt >= 10) return 'caution';
+    return 'ok';
+  }
+
+  var TILT_COLORS = { ok: '#d2e6a5', caution: '#e8b84a', steep: '#ed9678' };
+
+  /** The rover's path and every stop, coloured by the tilt it measured there. */
+  function createRoverLayer() {
+    var group = L.layerGroup();
+    L.polyline(waypoints.map(function (w) { return [w.lat, w.lon]; }), {
+      color: '#f4eed7', weight: 1.5, opacity: 0.7, dashArray: '4 4', interactive: false
+    }).addTo(group);
+    waypoints.forEach(function (w) {
+      L.circleMarker([w.lat, w.lon], {
+        radius: 3, weight: 1, color: '#172522',
+        fillColor: TILT_COLORS[tiltClass(w.tilt)], fillOpacity: 0.95
+      }).bindTooltip('Sol ' + w.sol + ' · ' + w.elev.toFixed(0) + ' m · tilt ' + w.tilt.toFixed(1) + '°')
+        .addTo(group);
+    });
+    return group;
+  }
+
+  function createMarkers() {
+    L.marker([habitat.lat, habitat.lon], {
+      icon: L.divIcon({ className: 'marker-habitat', html: '⌂', iconSize: [26, 26] }),
+      title: habitat.name, zIndexOffset: 500
+    }).addTo(map).on('click', function () { addStop(habitat); });
+
+    data.targets.forEach(function (target) {
+      L.marker([target.lat, target.lon], {
+        icon: L.divIcon({ className: 'marker-target', html: target.id, iconSize: [26, 26] }),
+        title: target.name, zIndexOffset: 400
+      }).addTo(map).on('click', function () { inspect(target); });
+    });
+  }
+
+  /** One row in the layers panel: checkbox plus opacity slider. */
+  function addLayerControl(spec) {
+    var row = el('div', 'layer');
+    var head = el('div', 'layer-head');
+    var box = el('input');
+    box.type = 'checkbox';
+    box.id = 'layer-' + spec.key;
+    box.checked = spec.on;
+    var label = el('label', null, spec.name);
+    label.htmlFor = box.id;
+    head.append(box, label);
+
+    var detail = el('small', null, spec.detail);
+    var sliderRow = el('div', 'slider-row');
+    var slider = el('input');
+    slider.type = 'range';
+    slider.id = 'opacity-' + spec.key;
+    slider.min = 0;
+    slider.max = 100;
+    slider.value = spec.opacity;
+    slider.setAttribute('aria-label', spec.name + ' opacity');
+    var output = el('output', null, spec.opacity + '%');
+    sliderRow.append(slider, output);
+
+    box.addEventListener('change', function () { spec.setVisible(box.checked); });
+    slider.addEventListener('input', function () {
+      output.textContent = slider.value + '%';
+      spec.setOpacity(slider.value / 100);
+    });
+
+    row.append(head, detail, sliderRow);
+    $('layerControls').append(row);
+    spec.setVisible(spec.on);
+  }
+
+  function setUpLayers() {
+    data.tileLayers.forEach(function (layer, index) {
+      var tiles = createTileLayer(layer, index + 1);
+      addLayerControl({
+        key: layer.key, name: layer.name, detail: layer.detail, on: layer.on, opacity: layer.opacity,
+        setVisible: function (on) { if (on) tiles.addTo(map); else map.removeLayer(tiles); },
+        setOpacity: function (value) { tiles.setOpacity(value); }
+      });
+    });
+
+    var rover = createRoverLayer();
+    addLayerControl({
+      key: 'rover', name: 'Perseverance path', detail: 'Mars 2020 · measured elevation and tilt',
+      on: true, opacity: 100,
+      setVisible: function (on) { if (on) rover.addTo(map); else map.removeLayer(rover); },
+      setOpacity: function (value) {
+        rover.eachLayer(function (layer) { layer.setStyle({ opacity: value * 0.7, fillOpacity: value }); });
+      }
+    });
+  }
+
+  function setHint(text) { $('mapHint').textContent = text; }
+
+  var DEFAULT_HINT = 'Click a numbered marker to inspect a science stop. Click the map to read its geology.';
+
+  function setUpMapEvents() {
+    map.on('mousemove', function (event) {
+      var point = { lat: event.latlng.lat, lon: event.latlng.lng };
+      var text = formatCoords(point.lat, point.lon);
+      var hit = ARES.geo.nearest(waypoints, point, config.mars.radiusM);
+      if (hit.distanceM <= config.rover.snapRadiusM) {
+        var w = waypoints[hit.index];
+        text += ' · rover measured ' + w.elev.toFixed(0) + ' m, tilt ' + w.tilt.toFixed(1) + '°';
+      } else {
+        text += ' · no rover measurement here';
+      }
+      $('readout').textContent = text;
+    });
+
+    map.on('click', function (event) {
+      var lat = event.latlng.lat;
+      var lon = event.latlng.lng;
+      if (state.adding) {
+        var customCount = state.stops.filter(function (s) { return s.custom; }).length;
+        addStop({ name: 'Waypoint ' + (customCount + 1), lat: lat, lon: lon, stopMin: 0, custom: true });
+        return;
+      }
+      setHint('Looking up geology…');
+      api.geologyAt(lat, lon).then(function (unit) {
+        setHint(unit ? 'USGS geologic unit here: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.');
+      }).catch(function () {
+        setHint('Geology lookup failed. Check the connection and click again.');
+      });
+    });
+
+    $('resetView').addEventListener('click', function () {
+      map.setView(config.map.center, config.map.zoom);
+    });
+  }
+
+  /* ---------- 4. Route editing ---------- */
+
+  function addStop(stop) {
+    var last = state.stops[state.stops.length - 1];
+    if (last.lat === stop.lat && last.lon === stop.lon) return; // already there
+    state.stops.push(stop);
+    render();
+  }
+
+  function setUpRouteButtons() {
+    $('addMode').addEventListener('click', function () {
+      state.adding = !state.adding;
+      $('addMode').classList.toggle('selected', state.adding);
+      $('addMode').setAttribute('aria-pressed', String(state.adding));
+      $('map').classList.toggle('adding', state.adding);
+      setHint(state.adding
+        ? 'Click the map to add a waypoint. Ground off the rover path counts as unverified. Press Escape to finish.'
+        : DEFAULT_HINT);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && state.adding) $('addMode').click();
+    });
+    $('returnHome').addEventListener('click', function () { addStop(habitat); });
+    $('undo').addEventListener('click', function () {
+      if (state.stops.length > 1) state.stops.pop();
+      render();
+    });
+    $('clear').addEventListener('click', function () {
+      state.stops = [habitat];
+      render();
+    });
+    $('demo').addEventListener('click', function () {
+      var pick = function (id) {
+        return toStop(data.targets.filter(function (t) { return t.id === id; })[0]);
+      };
+      state.stops = [habitat, pick('02'), pick('03'), pick('01'), habitat];
+      render();
+    });
+  }
+
+  /* ---------- 5. Plan panel ---------- */
+
+  function drawRoute(summary) {
+    routeLayer.clearLayers();
+    summary.legs.forEach(function (leg) {
+      var line = leg.points.map(function (p) { return [p.lat, p.lon]; });
+      L.polyline(line, { color: '#19251d', weight: 7, opacity: 0.9, interactive: false }).addTo(routeLayer);
+      L.polyline(line, {
+        color: leg.verified ? '#d2e6a5' : '#ed9678',
+        weight: 3, dashArray: leg.verified ? null : '8 6', interactive: false
+      }).addTo(routeLayer);
+    });
+    state.stops.forEach(function (stop) {
+      if (!stop.custom) return;
+      L.circleMarker([stop.lat, stop.lon], {
+        radius: 6, color: '#283626', weight: 2, fillColor: '#ed9678', fillOpacity: 1
+      }).bindTooltip(stop.name).addTo(routeLayer);
+    });
+  }
+
+  function drawRouteList() {
+    var list = $('routeList');
+    list.replaceChildren();
+    state.stops.forEach(function (stop, index) {
+      var item = el('li');
+      item.append(el('b', null, index === 0 ? '⌂' : String(index).padStart(2, '0')));
+      var text = el('div', null, stop.name);
+      var kind = index === 0 ? 'Airlock, start'
+        : stop.stopMin ? stop.stopMin + ' min science stop'
+        : stop.custom ? 'Waypoint' : 'Return';
+      text.append(el('small', null, kind));
+      item.append(text);
+      list.append(item);
+    });
+    $('pointCount').textContent = state.stops.length + (state.stops.length === 1 ? ' point' : ' points');
+  }
+
+  function drawStats(s) {
+    var rows = [
+      ['Walking', formatDuration(s.walkMin)],
+      ['Science stops', formatDuration(s.stopMin)],
+      ['Airlock', formatDuration(s.airlockMin)],
+      ['Climb / descent', s.climbM.toFixed(0) + ' m / ' + s.descentM.toFixed(0) + ' m'],
+      ['Steepest ground', s.maxSlopeDeg.toFixed(0) + '°'],
+      ['Farthest from habitat', formatKm(s.farthestM)],
+      ['Radiation dose', s.doseMsv.toFixed(3) + ' mSv']
+    ];
+    var box = $('stats');
+    box.replaceChildren();
+    rows.forEach(function (row) {
+      var line = el('div', 'stat');
+      line.append(el('span', null, row[0]), el('span', null, row[1]));
+      box.append(line);
+    });
+  }
+
+  function drawBudgets(s) {
+    var box = $('budgets');
+    box.replaceChildren();
+    var reservePercent = config.eva.reserveFraction * 100;
+    s.reserves.forEach(function (reserve) {
+      var left = Math.max(0, reserve.percentLeft);
+      var wrap = el('div', 'budget');
+      var labels = el('div');
+      labels.append(el('span', null, reserve.name), el('span', null, left.toFixed(0) + '%'));
+      var bar = el('div', 'bar');
+      var fill = el('span', left < reservePercent ? 'low' : null);
+      fill.style.width = left + '%';
+      bar.append(fill);
+      wrap.append(labels, bar);
+      box.append(wrap);
+    });
+    $('reserveNote').textContent = 'KEEP ' + reservePercent + '%';
+  }
+
+  /** Turn the planner's flags into plain sentences. */
+  function buildAlerts(s) {
+    var f = s.flags;
+    var alerts = [];
+    if (f.empty) {
+      alerts.push(['safe', 'Ready to plan. Pick a science stop or add a waypoint.']);
+      return alerts;
+    }
+    if (f.overLimit) alerts.push(['danger', 'Too long: ' + formatDuration(s.minutes) + ' against a ' + s.limitHours.toFixed(1) + ' h limit. Drop a stop.']);
+    if (f.slopeLimit) alerts.push(['danger', 'Too steep: ' + s.maxSlopeDeg.toFixed(0) + '° on this route, limit ' + config.slope.limitDeg + '°.']);
+    if (f.walkBack) alerts.push(['danger', 'Too far: ' + formatKm(s.farthestM) + ' from the habitat, walk-back limit ' + config.eva.walkBackLimitKm.toFixed(1) + ' km. This stop needs a rover.']);
+    if (f.slopeCaution) alerts.push(['warn', 'Steep section: Perseverance measured ' + s.maxSlopeDeg.toFixed(0) + '° on this route. Take it slowly.']);
+    if (f.unverified) alerts.push(['warn', s.unverifiedLegs + (s.unverifiedLegs === 1 ? ' leg crosses' : ' legs cross') + ' ground the rover never drove. No elevation data there; time is padded by ' + Math.round((config.walking.unverifiedPenalty - 1) * 100) + '%.']);
+    if (f.open) alerts.push(['warn', 'The route does not return to the habitat yet. Press Return.']);
+    if (s.go && !f.slopeCaution && !f.unverified) alerts.push(['safe', 'Go. The whole route follows ground Perseverance drove and stays inside every limit.']);
+    return alerts;
+  }
+
+  function drawAlerts(s) {
+    var box = $('alerts');
+    box.replaceChildren();
+    buildAlerts(s).forEach(function (alert) {
+      box.append(el('div', 'alert ' + alert[0], alert[1]));
+    });
+
+    var verdict = $('verdict');
+    var f = s.flags;
+    var label = f.empty ? 'DRAFT' : !s.go ? 'NO-GO' : (f.slopeCaution || f.unverified) ? 'GO WITH CAUTION' : 'GO';
+    verdict.textContent = label;
+    verdict.className = 'tag ' + (label === 'NO-GO' ? 'bad' : label === 'GO' ? 'good' : label === 'DRAFT' ? '' : 'warn');
+  }
+
+  function drawProfile(s) {
+    var canvas = $('profile');
+    var ratio = Math.min(2, window.devicePixelRatio || 1);
+    var width = canvas.clientWidth;
+    var height = canvas.clientHeight;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = '11px Consolas, monospace';
+    ctx.fillStyle = '#96a19c';
+    ctx.textBaseline = 'middle';
+
+    var points = s.profile;
+    if (points.length < 2) {
+      ctx.textAlign = 'center';
+      ctx.fillText('Add a stop on the rover path to see measured elevation', width / 2, height / 2);
+      return;
+    }
+
+    var left = 58, right = 12, top = 10, bottom = 20;
+    var plotW = width - left - right;
+    var plotH = height - top - bottom;
+    var low = Infinity, high = -Infinity;
+    points.forEach(function (p) { low = Math.min(low, p.elev); high = Math.max(high, p.elev); });
+    low = Math.floor(low / 5) * 5;
+    high = Math.ceil(high / 5) * 5;
+    if (high - low < 10) high = low + 10;
+    var total = points[points.length - 1].d || 1;
+    var x = function (d) { return left + d / total * plotW; };
+    var y = function (elev) { return top + (1 - (elev - low) / (high - low)) * plotH; };
+
+    ctx.strokeStyle = '#303a3b';
+    ctx.lineWidth = 1;
+    ctx.textAlign = 'right';
+    [low, (low + high) / 2, high].forEach(function (value) {
+      ctx.beginPath();
+      ctx.moveTo(left, y(value));
+      ctx.lineTo(width - right, y(value));
+      ctx.stroke();
+      ctx.fillText(Math.round(value) + ' m', left - 6, y(value));
+    });
+
+    ctx.beginPath();
+    points.forEach(function (p, i) {
+      if (i === 0) ctx.moveTo(x(p.d), y(p.elev)); else ctx.lineTo(x(p.d), y(p.elev));
+    });
+    ctx.strokeStyle = '#d2e6a5';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.lineTo(x(total), top + plotH);
+    ctx.lineTo(left, top + plotH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(210, 230, 165, 0.14)';
+    ctx.fill();
+
+    ctx.fillStyle = '#96a19c';
+    ctx.textAlign = 'left';
+    ctx.fillText('0 km', left, height - 8);
+    ctx.textAlign = 'right';
+    ctx.fillText(formatKm(total), width - right, height - 8);
+  }
+
+  /** Recalculate the plan and redraw everything that depends on it. */
+  function render() {
+    var s = planner.summarize(state.stops);
+    state.summary = s;
+    $('distance').replaceChildren(document.createTextNode((s.distanceM / 1000).toFixed(2) + ' '), el('small', null, 'km'));
+    $('duration').textContent = formatDuration(s.minutes) + ' of ' + s.limitHours.toFixed(1) + ' h';
+    $('undo').disabled = state.stops.length === 1;
+    drawRoute(s);
+    drawRouteList();
+    drawStats(s);
+    drawBudgets(s);
+    drawAlerts(s);
+    drawProfile(s);
+  }
+
+  /* ---------- 6. Science stops ---------- */
+
+  function createTargetCards() {
+    data.targets.forEach(function (target) {
+      var card = el('button', 'target-card');
+      card.type = 'button';
+      var thumb = el('div', 'terrain-thumb');
+      thumb.append(el('span', null, target.id + ' / SOL ' + target.sol));
+      var body = el('div', 'target-body');
+      body.append(el('small', null, target.area), el('h3', null, target.name), el('p', null, target.rock));
+      card.append(thumb, body);
+      card.addEventListener('click', function () { inspect(target); });
+      $('targetCards').append(card);
+
+      // Real photo from the sol the rover sampled here. The card works without it.
+      api.roverImages(target.sol, 'MCZ_LEFT', 1).then(function (images) {
+        if (!images.length) return;
+        var img = el('img');
+        img.src = images[0].thumb;
+        img.alt = 'Perseverance Mastcam-Z image, sol ' + target.sol;
+        img.loading = 'lazy';
+        thumb.prepend(img);
+      }).catch(function () { /* leave the plain card */ });
+    });
+  }
+
+  /** Open the drawer for one science stop and fill it with live data. */
+  function inspect(target) {
+    var box = $('drawerContent');
+    box.replaceChildren();
+
+    box.append(el('div', 'eyebrow', 'SCIENCE STOP ' + target.id));
+    box.append(el('h2', null, target.name));
+    box.append(el('div', 'drawer-meta', target.area + ' · ' + formatCoords(target.lat, target.lon)));
+
+    var round = planner.summarize([habitat, toStop(target), habitat]);
+    box.append(el('div', 'drawer-meta',
+      'Round trip from the habitat: ' + formatKm(round.distanceM) + ', ' + formatDuration(round.minutes) +
+      ', steepest ' + round.maxSlopeDeg.toFixed(0) + '°'));
+
+    box.append(el('h3', null, 'ROCK'));
+    box.append(el('p', null, target.rock));
+    var geology = el('p', 'live', 'USGS geologic unit: loading…');
+    box.append(geology);
+
+    box.append(el('h3', null, 'WHY GO'));
+    box.append(el('p', null, target.why));
+    box.append(el('h3', null, 'WHAT TO DO THERE'));
+    box.append(el('p', null, target.task + ' Plan ' + target.stopMin + ' minutes.'));
+
+    box.append(el('h3', null, 'WHAT PERSEVERANCE SAW, SOL ' + target.sol));
+    var gallery = el('div', 'gallery');
+    gallery.append(el('p', 'live', 'Loading rover images…'));
+    box.append(gallery);
+
+    var add = el('button', 'primary', '＋ Add to route');
+    add.type = 'button';
+    add.addEventListener('click', function () {
+      addStop(toStop(target));
+      $('inspection').close();
+    });
+    box.append(add);
+    box.append(el('p', 'reserve-note', 'Images: NASA/JPL-Caltech/ASU, Mastcam-Z raw frames. Position: where the rover was parked on sol ' + target.sol + '.'));
+
+    api.geologyAt(target.lat, target.lon).then(function (unit) {
+      geology.textContent = unit
+        ? 'USGS geologic unit: ' + unit.unit + ', ' + unit.description + ' (global map, coarse at this scale).'
+        : 'USGS geologic unit: none mapped here.';
+    }).catch(function () {
+      geology.textContent = 'USGS geologic unit: lookup failed.';
+    });
+
+    api.roverImages(target.sol, 'MCZ_LEFT', 6).then(function (images) {
+      gallery.replaceChildren();
+      if (!images.length) {
+        gallery.append(el('p', 'live', 'No Mastcam-Z images listed for this sol.'));
+        return;
+      }
+      images.forEach(function (image) {
+        var link = el('a');
+        link.href = image.full;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        var img = el('img');
+        img.src = image.thumb;
+        img.alt = 'Mastcam-Z image, sol ' + image.sol;
+        img.loading = 'lazy';
+        link.append(img);
+        gallery.append(link);
+      });
+    }).catch(function () {
+      gallery.replaceChildren(el('p', 'live', 'Rover images did not load. Check the connection.'));
+    });
+
+    $('inspection').showModal();
+  }
+
+  /* ---------- 7. Site conditions ---------- */
+
+  function conditionCell(label) {
+    var cell = el('div');
+    cell.append(el('label', null, label));
+    var value = el('strong', null, 'Loading…');
+    var note = el('small', null, '');
+    cell.append(value, note);
+    $('conditions').append(cell);
+    return { value: value, note: note };
+  }
+
+  function setUpConditions() {
+    var site = conditionCell('HABITAT SITE');
+    site.value.textContent = 'Three Forks';
+    site.note.textContent = formatCoords(habitat.lat, habitat.lon);
+
+    var limit = conditionCell('EVA LIMIT');
+    limit.value.textContent = planner.limitHours().toFixed(1) + ' h';
+    limit.note.textContent = 'shortest consumable less ' + config.eva.reserveFraction * 100 + '% reserve';
+
+    var radiation = conditionCell('SURFACE RADIATION');
+    radiation.value.textContent = config.radiation.surfaceDoseMsvPerHour + ' mSv/h';
+    radiation.note.textContent = 'Curiosity RAD average';
+
+    var weather = conditionCell('WEATHER · PERSEVERANCE MEDA');
+    api.latestWeather().then(function (w) {
+      if (!w) { weather.value.textContent = 'No readings'; return; }
+      weather.value.textContent = w.minTempC.toFixed(0) + ' to ' + w.maxTempC.toFixed(0) + ' °C' +
+        (w.pressurePa ? ' · ' + w.pressurePa.toFixed(0) + ' Pa' : '');
+      weather.note.textContent = 'latest published sol ' + w.sol + ' (' + w.earthDate + ') · daylight ' +
+        w.sunrise.slice(0, 5) + ' to ' + w.sunset.slice(0, 5);
+    }).catch(function () {
+      weather.value.textContent = 'Unavailable';
+      weather.note.textContent = 'MEDA feed did not load';
+    });
+
+    var space = conditionCell('SPACE WEATHER · NASA DONKI');
+    api.spaceWeather().then(function (sw) {
+      space.value.textContent = sw.particleEvents
+        ? sw.particleEvents + ' particle event alert' + (sw.particleEvents === 1 ? '' : 's')
+        : 'No particle events';
+      space.value.className = sw.particleEvents ? 'bad' : 'good';
+      space.note.textContent = sw.total + (sw.total === 1 ? ' notice in ' : ' notices in ') +
+        config.api.spaceWeatherDays + ' days, Sun-wide, not Mars-specific';
+    }).catch(function () {
+      space.value.textContent = 'Unavailable';
+      space.note.textContent = 'DONKI did not load (the demo key allows 30 requests an hour)';
+    });
+  }
+
+  /* ---------- 8. Export and start-up ---------- */
+
+  function exportPlan() {
+    var s = state.summary;
+    var plan = {
+      title: 'ARES Jezero EVA plan',
+      note: 'Planning concept. Terrain from NASA Perseverance waypoints; walking and suit figures are assumptions.',
+      verdict: $('verdict').textContent,
+      stops: state.stops,
+      distanceKm: +(s.distanceM / 1000).toFixed(3),
+      durationMin: Math.round(s.minutes),
+      limitHours: s.limitHours,
+      steepestDeg: +s.maxSlopeDeg.toFixed(1),
+      farthestFromHabitatKm: +(s.farthestM / 1000).toFixed(3),
+      doseMsv: +s.doseMsv.toFixed(4),
+      flags: s.flags,
+      assumptions: { walking: config.walking, slope: config.slope, eva: config.eva, radiation: config.radiation }
+    };
+    var url = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }));
+    var link = el('a');
+    link.href = url;
+    link.download = 'ares-eva-plan.json';
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function start() {
+    $('scienceGoal').textContent = data.scienceGoal;
+    setUpLayers();
+    createMarkers();
+    setUpMapEvents();
+    setUpRouteButtons();
+    setUpConditions();
+    createTargetCards();
+    $('closeDrawer').addEventListener('click', function () { $('inspection').close(); });
+    $('export').addEventListener('click', exportPlan);
+    window.addEventListener('resize', function () { drawProfile(state.summary); });
+    setHint(DEFAULT_HINT);
+    render();
+  }
+
+  start();
+
+  // Handy in the browser console while developing: ARES.debug.state, ARES.debug.map
+  ARES.debug = { state: state, map: map, planner: planner };
 })();
