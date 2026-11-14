@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#101719">
   <title>ARES / Marswalk Mission Planner</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="assets/vendor/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -33,6 +33,25 @@
 
   <!-- Conditions: filled by app.js from live NASA feeds. -->
   <section class="conditions" id="conditions" aria-label="Site conditions"></section>
+
+  <section class="crew-toolbar panel" aria-label="Crew controls">
+    <div>
+      <div class="eyebrow">CREW ACCESS</div>
+      <button id="gloveToggle" type="button" aria-pressed="false">Glove-Friendly UI: OFF</button>
+    </div>
+    <p id="offlineStatus" role="status">Preparing local map and waypoint cache…</p>
+  </section>
+
+  <section class="rtb-panel" aria-label="Emergency return to base">
+    <div class="rtb-position">
+      <label for="crewPosition">CREW POSITION · MANUAL</label>
+      <select id="crewPosition" aria-describedby="positionNote"></select>
+      <p id="positionNote">Defaults to the planned endpoint. Select your actual waypoint; no live position tracking.</p>
+    </div>
+    <button id="emergencyRTB" type="button">EMERGENCY RTB <span>(Return to Base)</span></button>
+    <div id="rtbStatus" role="status">Compute the fastest walking route to the habitat on the recorded rover traverse.</div>
+    <button id="dismissRTB" type="button" hidden>Dismiss return overlay</button>
+  </section>
 
   <section class="workspace">
     <aside class="layers panel">
@@ -92,6 +111,28 @@
     </aside>
   </section>
 
+  <section id="sampling" class="sampling panel" aria-labelledby="samplingTitle">
+    <div class="panel-title"><h2 id="samplingTitle">Geological sample log</h2><span id="sampleCount" class="tag">0 logs</span></div>
+    <div class="sample-grid">
+      <div>
+        <label for="sampleWaypoint">SAMPLING WAYPOINT</label>
+        <select id="sampleWaypoint"></select>
+        <p id="sampleLocation" class="drawer-meta"></p>
+        <div class="dictation-actions">
+          <button id="startDictation" type="button">Start voice note</button>
+          <button id="stopDictation" type="button" disabled>Stop dictation</button>
+        </div>
+        <p id="speechStatus" role="status"></p>
+        <p id="speechInterim" aria-live="off"></p>
+        <label for="sampleText">OBSERVATIONS · REVIEW BEFORE SAVING</label>
+        <textarea id="sampleText" rows="5" placeholder="Rock texture, bedding, sample ID, collection method…" aria-describedby="sampleHelp"></textarea>
+        <p id="sampleHelp" class="muted">Text drafts and timestamped logs stay on this device and are included in the plan export. Audio is transcribed, not recorded.</p>
+        <button id="saveSample" class="primary" type="button">Save sample log</button>
+      </div>
+      <ol id="sampleLogs" aria-label="Saved logs for the selected waypoint"></ol>
+    </div>
+  </section>
+
   <section class="targets">
     <div class="section-title">
       <div class="eyebrow">FOLLOW THE SCIENCE</div>
@@ -113,13 +154,17 @@
 </dialog>
 
 <!-- Order matters: config and data first, then logic, then the UI. -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/vendor/leaflet.js"></script>
+<script src="js/offlineAssets.js"></script>
 <script src="js/config.js"></script>
 <script src="js/geo.js"></script>
 <script src="js/roverTraverse.js"></script>
 <script src="js/marsData.js"></script>
+<script src="js/crewRouter.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/nasaApi.js"></script>
+<script src="js/speechNotes.js"></script>
+<script src="js/sampleLog.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -209,3 +209,107 @@ dialog .primary { width: 100%; margin: 20px 0 12px; }
   #mapWrap { min-height: 420px; }
   #targetCards { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---------- Crew access, emergency routing and sampling ---------- */
+[hidden] { display: none !important; }
+select, textarea {
+  width: 100%; max-width: 100%; background: #101719; color: var(--text);
+  border: 1px solid #64736b; border-radius: 4px; padding: 12px; font: inherit;
+}
+textarea { resize: vertical; line-height: 1.6; }
+select:focus-visible, textarea:focus-visible { outline: 3px solid var(--warn); outline-offset: 3px; }
+.crew-toolbar { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; }
+.crew-toolbar .eyebrow { margin-bottom: 8px; }
+.crew-toolbar > div { flex: 0 0 auto; }
+#offlineStatus { font-size: 12px; color: var(--muted); margin: 0; }
+#offlineStatus.cache-warning { color: #ffcf66; }
+#gloveToggle[aria-pressed="true"] { color: #171107; background: #ffcf66; border-color: #ffcf66; font-weight: 700; }
+.rtb-panel {
+  border: 2px solid #ff766b; border-radius: 6px; padding: 18px; margin-bottom: 18px;
+  display: grid; grid-template-columns: minmax(220px, 1fr) minmax(250px, 1fr); gap: 14px 24px;
+  background: #271614;
+}
+.rtb-position { min-width: 0; }
+.rtb-position label { color: #ffd5bd; }
+#positionNote { color: #efd2bc; font-size: 12px; margin: 8px 0 0; }
+#emergencyRTB {
+  background: #b52019; color: #fff; border: 3px solid #ffb6a9;
+  min-height: 104px; padding: 24px; font: 700 30px/1.15 var(--display); letter-spacing: 1px;
+  box-shadow: 0 0 0 3px #170d0c;
+}
+#emergencyRTB span { display: block; font: 600 17px/1.5 var(--body); letter-spacing: 0; }
+#emergencyRTB:hover { background: #8d140f; }
+#emergencyRTB:focus-visible { outline: 4px solid #ffcf66; outline-offset: 4px; }
+#rtbStatus { grid-column: 1 / -1; font-size: 15px; line-height: 1.6; white-space: pre-line; }
+#rtbStatus.warning { color: #ffcf66; border-left: 4px solid #ffcf66; padding-left: 12px; }
+#rtbStatus.danger { color: #fff; background: #8d140f; border: 2px solid #ffb6a9; padding: 14px; }
+#dismissRTB { justify-self: start; }
+.route-log { margin-left: auto; font-size: 12px; flex-shrink: 0; }
+.sampling { margin-top: 22px; scroll-margin-top: 20px; }
+.sampling h2 { font: 28px var(--display); }
+.sample-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+.sample-grid > div { min-width: 0; }
+.dictation-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+#speechStatus { color: #ffcf66; min-height: 3em; }
+#speechStatus.listening { color: #fff; background: #8d140f; padding: 12px; border-left: 4px solid #ffb6a9; }
+#speechInterim { color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+#sampleLogs { max-height: 440px; }
+#sampleLogs li { display: block; border-bottom: 1px solid var(--line); padding: 14px 0; }
+#sampleLogs time { font: 12px var(--mono); color: var(--muted); }
+#sampleLogs p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* 60px is the minimum hit area, with extra padding around each control. */
+body.glove-ui { font-size: 18px; --warn: #ffcf66; --danger: #ffb6a9; --muted: #c1cbc4; --line: #6b7971; }
+.glove-ui button, .glove-ui select, .glove-ui textarea,
+.glove-ui .layer-head, .glove-ui .slider-row, .glove-ui nav a, .glove-ui footer a,
+.glove-ui .gallery a, .glove-ui .source-note a {
+  min-height: 60px; padding: 18px 20px; font-size: 18px; touch-action: manipulation;
+}
+.glove-ui button { min-width: 60px; }
+.glove-ui .workspace { grid-template-columns: 290px minmax(300px, 1fr) 360px; }
+.glove-ui .layer-head { position: relative; padding: 10px 0; }
+.glove-ui .layer-head input { flex-shrink: 0; width: 32px; height: 32px; }
+.glove-ui .layer-head label { display: flex; align-items: center; min-height: 60px; flex: 1; font-size: 18px; }
+.glove-ui .layer-head label::before { content: ''; position: absolute; inset: 0; }
+.glove-ui .slider-row { padding: 0; margin-left: 0; }
+.glove-ui input[type="range"] { height: 60px; }
+.glove-ui .slider-row output { font-size: 16px; }
+.glove-ui .map-top { min-height: 90px; height: auto; gap: 10px; flex-wrap: wrap; padding: 10px; }
+.glove-ui .map-hint { left: 84px; max-width: calc(100% - 96px); font-size: 16px; }
+.glove-ui .map-readout { font-size: 16px; max-width: calc(100% - 24px); }
+.glove-ui .leaflet-control-zoom a { width: 60px; height: 60px; line-height: 60px; font-size: 30px; }
+.glove-ui .marker-target, .glove-ui .marker-habitat { font-size: 22px; border-width: 3px; }
+.glove-ui .conditions strong { font-size: 30px; }
+.glove-ui .conditions label, .glove-ui .plan-label, .glove-ui .budget-title,
+.glove-ui .profile-title, .glove-ui .tag, .glove-ui .drawer-meta { font-size: 16px; }
+.glove-ui .conditions small, .glove-ui .layer small, .glove-ui .legend, .glove-ui .muted,
+.glove-ui #positionNote, .glove-ui #offlineStatus, .glove-ui .source-note,
+.glove-ui .stat, .glove-ui .budget > div:first-child, .glove-ui .route-summary > div,
+.glove-ui .route-summary > div span, .glove-ui #alerts, .glove-ui ol li,
+.glove-ui ol li small, .glove-ui dialog p, .glove-ui .target-body p, .glove-ui .target-body small { font-size: 17px; }
+.glove-ui .route-summary > strong { font-size: 52px; }
+.glove-ui .route-actions { flex-wrap: wrap; }
+.glove-ui #routeList { max-height: 360px; }
+.glove-ui .alert:not(.safe) { color: #ffcf66; border-color: #ffcf66; background: #392800; }
+.glove-ui .alert.danger, .glove-ui .tag.bad { color: #fff; background: #8d140f; border: 2px solid #ffb6a9; }
+.glove-ui .bar { height: 12px; }
+.glove-ui .bar span.low { background: #ff5c4d; }
+.glove-ui .target-card { padding: 0; }
+.glove-ui .target-body { padding: 20px; }
+.glove-ui .target-body h3 { font-size: 22px; }
+.glove-ui dialog { width: 600px; }
+.glove-ui header { height: auto; min-height: 90px; flex-wrap: wrap; padding-block: 12px; gap: 20px; }
+.glove-ui .source-note a, .glove-ui footer a { display: inline-flex; align-items: center; }
+@media (max-width: 1400px) {
+  .glove-ui .workspace { grid-template-columns: 290px minmax(280px, 1fr); }
+  .glove-ui .planner { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .crew-toolbar { align-items: stretch; flex-direction: column; gap: 14px; }
+  .rtb-panel, .sample-grid { grid-template-columns: 1fr; }
+  #emergencyRTB { grid-row: 1; }
+  #emergencyRTB, .glove-ui #emergencyRTB { font-size: 30px; }
+  .glove-ui .conditions { grid-template-columns: 1fr; }
+  .glove-ui #targetCards { grid-template-columns: 1fr; }
+  .glove-ui .profile-title { flex-direction: column; }
+}

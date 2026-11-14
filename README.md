@@ -1,49 +1,59 @@
-﻿# ARES — Marswalk EVA Planner
+# ARES — Marswalk EVA Planner
 
-A buildless, offline-capable NASA Space Apps concept for a local Jezero Crater EVA. Open `index.html` directly, use VS Code Live Server, or serve this folder on GitHub Pages. No API keys, install, or build required. Optional Google Fonts fall back to system fonts when offline.
+A buildless Jezero Crater planning concept using NASA Mars Trek tiles and the bundled Perseverance traverse. Serve this folder with VS Code Live Server or another static server. No install or build is required. Leaflet 1.9.4 is bundled locally; optional Google Fonts fall back to system fonts.
 
-## Files
+This is an educational planning tool. Walking speed, slope thresholds, suit limits and radiation assumptions remain exactly as supplied in js/config.js. Crew controls do not modify the scientific source files.
 
-- `index.html`: semantic HUD, SVG tactical map, accessible controls and target drawer.
-- `css/styles.css`: responsive slate/olive mission-control interface.
-- `js/marsData.js`: five curated science contexts, four layer definitions, illustrative local polygons and origin.
-- `js/app.js`: pan/zoom, layer opacity, route segment sampling, suit budgets, simulated telemetry and JSON export.
-- `assets/jezero-delta.jpg`: bundled NASA Perseverance Mastcam-Z delta context photograph.
-- `LICENSE`: Apache License 2.0 for original project code. NASA/partner imagery retains its original credits and usage terms.
+## Crew controls
 
-## Try it
+1. **EMERGENCY RTB (Return to Base):** select your actual waypoint in **Crew position · manual**, then press the red button. The default is the planned endpoint; the application has no live position feed. The red overlay shows the fastest walking route between the snapped endpoints on the existing rover graph, weighted by the existing slope and walking-time model. The original EVA plan remains available. Walking ETA excludes science stops and airlock operations. Exact connections to the rover graph are included in distance/time and marked unverified. Positions outside the configured snap radius produce an explicit unavailable result. Recorded slopes still trigger the configured warning and danger states; fastest does not imply terrain clearance. Dismiss the overlay to return to the plan view.
+2. **Glove-Friendly UI:** the persistent toggle enlarges controls and science markers to at least 60 px touch targets, increases HUD typography and strengthens amber/red warnings. It also enlarges map zoom controls, layer labels, sliders and dialog controls.
+3. **Geological sample log:** choose a science target or a custom route waypoint. Use **Start voice note**, speak, **Stop dictation**, review the transcript, then **Save sample log**. You can also type observations. Logs contain the waypoint name, coordinates and a timestamp; drafts persist as you type. Route **Log** buttons and the science drawer open the corresponding sample log. The JSON plan export includes saved logs, drafts and the active return route. Dictation stores text, not raw audio.
+4. **Offline caching:** source map/target/traverse snapshots, the editable route, map center/zoom, layer visibility/opacity, glove preference, logs and drafts use versioned localStorage keys. Successfully loaded source data always wins over cached copies. Saved route references resolve against current science targets on reload. Corrupt, blocked or full storage is reported without stopping the planner.
 
-1. Inspect a numbered science marker or science card. Add a target from its drawer.
-2. Select **Add waypoint**, then click terrain. Drag to pan, use +/- or the mouse wheel to zoom, and Recenter to reset. Escape ends placement.
-3. **Return** appends the habitat; it does not retrace the outbound path. Review the straight return segment for hazards.
-4. Toggle the four layers and adjust their opacity. Hiding a layer does not disable safety checks.
-5. Load demo for a deliberately hazardous route, then Undo or Clear. Export downloads the plan and estimates as JSON.
-6. Keyboard users can inspect targets with Tab/Enter and add them from the dialog, or focus the map and press Enter in placement mode to add its center. Arrow keys pan the map.
+Speech recognition needs a supported browser and microphone permission. It may send audio to the browser's recognition service and may need a connection; typed logs work offline. See [SpeechRecognition documentation](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
 
-## Scientific integrity and NASA dataset provenance
+## Preparing for offline use
 
-**This is an educational planning simulation, not navigation or human-spaceflight software.** It demonstrates four NASA science data types, but it does not yet ingest four calibrated, georeferenced NASA science products. No claim of final challenge compliance or NASA endorsement is made. Target placements, habitat, local coordinates, contours, geology boundaries, slope and thermal/exposure polygons are illustrative. Real formation names are used for science context, not surveyed locations. The 4 × 3 km local sector cannot represent the full Perseverance traverse at surveyed scale.
+Open the app once on **localhost or HTTPS** and wait for **Offline app ready**. A service worker caches the app shell, source scripts and the locally bundled Leaflet files. Explore the map layers and zoom levels you need while connected; successfully fetched tiles are cached as you view them. The tile cache is bounded to the most recent 240 unique requests. Unvisited or evicted tiles require a connection, and storage remains subject to browser quotas. The first view is requested again after the worker takes control so its tiles can be cached.
 
-| Layer / context | Primary reference | Prototype implementation |
-| --- | --- | --- |
-| Optical / high resolution | [JPL Mars Trek](https://trek.nasa.gov/mars/), [MRO HiRISE](https://science.nasa.gov/mission/mars-reconnaissance-orbiter/science-instruments/hirise/) | Procedural shaded relief referenced to HiRISE-style morphology; not an orbital mosaic or DEM. |
-| Topography / slope | Mars Trek elevation products and HiRISE stereo DTMs | Illustrative contours and 19° / 23° exclusion polygons. >15° is a conservative scenario assumption supplied by the brief, not a NASA certified suit limit. |
-| Geologic / mineralogy | [Sun & Stack, 2020, USGS SIM 3464](https://pubs.usgs.gov/publication/sim3464), [USGS Planetary Geologic Mapping](https://www.usgs.gov/centers/astrogeology-science-center/science/planetary-geologic-mapping), MRO CRISM context | Schematic clay-bearing delta and carbonate margin zones. No quantitative mineral abundance or GIS boundaries loaded. |
-| Thermal / radiation | [Mars Odyssey THEMIS](https://science.nasa.gov/mission/2001-mars-odyssey/science/), [Curiosity RAD](https://science.nasa.gov/mission/msl-curiosity/science/instruments/rad/) | Soft ground and shelter analogues. No thermal inertia raster, solar-particle forecast, or validated shielding model. Thermal inertia alone cannot establish trafficability or radiation shelter. |
-| Rover ground truth | [Perseverance raw gallery](https://mars.nasa.gov/mars2020/multimedia/raw-images/), [NASA delta context / PIA24485](https://science.nasa.gov/blog/studying-the-jezero-delta-from-a-distance/), [JPL delta science](https://www.jpl.nasa.gov/news/nasas-perseverance-rover-deciphers-ancient-history-of-martian-lake/) | Bundled curated Mastcam-Z photograph, credited NASA/JPL-Caltech/ASU/MSSS. This is a shared delta context image, not live imagery or a photograph at every target. A labeled procedural fallback remains if the local image is missing. |
+Opening index.html directly still allows local data storage where the browser permits it, but service-worker offline page/tile caching requires localhost or HTTPS. Browser-local data is specific to the origin and device and may be cleared by browser settings. Export the plan for a portable backup. See [Service Worker API documentation](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API).
 
-## Model and units
+Live MEDA weather, DONKI notifications, USGS point lookups and raw rover photos remain network features. Old weather and space-weather notifications are never replayed as live readings. The source snapshot contains the existing map and waypoint data verbatim; it does not replace them with illustrative terrain.
 
-Local SVG coordinates span 1,000 × 750 units; each unit is 4 meters. Approximate latitude/longitude uses Mars radius ~3,389.5 km (59,158 m per degree latitude) at 18.4447° N / 77.4508° E. This local plane is for demonstration only.
+## Existing planner
 
-Routes use Euclidean segment lengths, sampled at intervals no greater than 10 m. The speed baseline is 600 m/h. Travel time is multiplied by `1 + slope/15` with a default modeled slope of 4°; soft terrain adds a 1.45 multiplier. Science stations add 15–30 minutes. Airlock operations add 20 minutes to a nonempty traverse. Paths are checked even if overlays are hidden. Sampling could miss features narrower than 10 m; no automatic safe rerouting or terrain mesh exists.
+Inspect numbered science markers or cards, add science stops from their drawer, or use **Add waypoint** to place custom stops. **Return** appends the habitat using the existing planner. **Undo**, **Clear**, **Load example**, layer blending and **Export plan (JSON)** retain their original behavior. Hiding a layer does not disable route checks.
 
-Modeled usable endurance from a full suit is oxygen 8 h, battery 7.5 h, cooling water 7 h. Reserves are linear with estimated duration. Alert at <20% remaining or >6 h EVA. These are design assumptions, not actual spacesuit specifications. Dose integrates modeled ambient rate (0.026 mSv/h), exposed zones (0.045), and hypothetical shelter (0.018) over travel and station time; airlock time is excluded. It is not a radiation risk forecast. Dose is a rate, not solar irradiance in W/m².
+The original planner follows the recorded rover graph between snapped stops and marks off-path legs unverified. Its route estimates, safety flags, consumable calculations and original source values are unchanged. The emergency router is separate and optimizes walking time rather than the original planner's distance weights.
 
-The fixed simulated Sol 1284 and start time 10:42:08 LMST are scenario values; LMST advances using a 1.02749 Earth/Mars time ratio. Temperature, pressure and relay are simulated. There is no connection to a rover, suit or relay. Science station sols are fictional human mission logs, not rover observation timestamps.
+## Files and data sources
 
-## Validation and next steps
+| File | Purpose |
+| --- | --- |
+| js/marsData.js | Authoritative map-layer definitions, habitat and science targets; unchanged by the crew update. |
+| js/roverTraverse.js | Authoritative Perseverance waypoint snapshot, elevations, tilts and provenance; unchanged. |
+| js/config.js | Original model and API configuration; unchanged. |
+| js/geo.js / js/planner.js | Existing geometry, graph and EVA calculations; unchanged. |
+| js/nasaApi.js | Existing NASA / USGS live requests; unchanged. |
+| js/crewRouter.js | Time-weighted return routing using the existing graph and assumptions. |
+| js/offlineAssets.js / sw.js | localStorage persistence, source snapshots and offline app/tile caching. |
+| js/speechNotes.js / js/sampleLog.js | Speech lifecycle, waypoint notes, draft persistence and saved logs. |
+| js/app.js / index.html / css/styles.css | Map, crew controls, HUD, inspection drawer and export integration. |
+| assets/vendor/ | Existing Leaflet version bundled for offline use, with its BSD license. |
 
-JavaScript syntax and deterministic calculations are checked for empty routes, known distances, interior slope/exposure crossings, and budget overruns. Browser preview depends on local browser automation availability; see delivery notes for the actual verification performed.
+The source files retain their dataset identifiers, exact positions and provenance. Primary services include [NASA Mars Trek](https://trek.nasa.gov/mars/), the [Perseverance waypoint feed](https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json), the [USGS global geologic map](https://pubs.usgs.gov/publication/sim3464), and [Perseverance raw images](https://mars.nasa.gov/mars2020/multimedia/raw-images/). Consult the current source files for the precise products, retrieval metadata and model assumptions.
 
-For a science-ready submission, ingest and co-register HiRISE imagery/DTM, USGS GIS units and THEMIS raster products; derive slope from elevation; document product IDs, resolution and uncertainty; validate all hazard models. Check the official challenge rules and licensing terms before submission.
+## Checks
+
+With Node.js installed, run:
+
+~~~text
+node tests/run-tests.js
+node tests/crew-tests.js
+node tests/offline-tests.js
+~~~
+
+These cover the existing scientific calculations, time-weighted return routing, exact endpoint connectors, source immutability, cached-source precedence, corrupt/blocked/full storage, sample persistence, speech result ownership, offline shell/data availability and bounded tile caching. Speech tests use a mock recognizer; microphone hardware and the browser's external speech service require a manual check. Offline-cache tests use an in-memory Cache Storage implementation.
+
+Original project code is Apache-2.0. Bundled Leaflet uses BSD-2-Clause (assets/vendor/LICENSE-Leaflet). NASA and partner imagery retains its original credits and usage terms.

@@ -17,6 +17,17 @@
   var api = ARES.api;
   var waypoints = ARES.roverTraverse.waypoints;
   var planner = ARES.createPlanner(config, waypoints);
+  var crewRouter = ARES.createCrewRouter(config, waypoints);
+  var offline = ARES.offline;
+  var sampleLog;
+  var crewPositions = [];
+  var manualPosition = null;
+  var returnRoute = null;
+  var scienceMarkers = [];
+  var savedMap = offline.read('map', {});
+  if (!savedMap || typeof savedMap !== 'object') savedMap = {};
+  var savedLayers = offline.read('layers', {});
+  if (!savedLayers || typeof savedLayers !== 'object') savedLayers = {};
 
   /* ---------- 1. Helpers ---------- */
 
@@ -47,7 +58,7 @@
 
   var habitat = toStop(data.habitat);
   var state = {
-    stops: [habitat],   // the plan, always starting at the habitat
+    stops: offline.restoreRoute(habitat), // local crew plan; authoritative targets are resolved again
     adding: false,      // true while map clicks add waypoints
     summary: null       // latest result of planner.summarize
   };
@@ -60,8 +71,8 @@
 
   var map = L.map('map', {
     crs: marsCrs,
-    center: config.map.center,
-    zoom: config.map.zoom,
+    center: offline.validPoint(savedMap) ? [savedMap.lat, savedMap.lon] : config.map.center,
+    zoom: Number.isFinite(savedMap.zoom) ? Math.max(config.map.minZoom, Math.min(config.map.maxZoom, savedMap.zoom)) : config.map.zoom,
     minZoom: config.map.minZoom,
     maxZoom: config.map.maxZoom
   });
@@ -70,6 +81,7 @@
   map.attributionControl.addAttribution('NASA/JPL-Caltech · Mars Trek · USGS');
 
   var routeLayer = L.layerGroup().addTo(map);
+  var returnLayer = L.layerGroup().addTo(map);
 
   /** Build one Leaflet tile layer from a marsData.tileLayers entry. */
   function createTileLayer(layer, zIndex) {
@@ -114,21 +126,26 @@
   }
 
   function createMarkers() {
-    L.marker([habitat.lat, habitat.lon], {
+    var baseMarker = L.marker([habitat.lat, habitat.lon], {
       icon: L.divIcon({ className: 'marker-habitat', html: '⌂', iconSize: [26, 26] }),
       title: habitat.name, zIndexOffset: 500
     }).addTo(map).on('click', function () { addStop(habitat); });
+    scienceMarkers.push({ marker: baseMarker, habitat: true });
 
     data.targets.forEach(function (target) {
-      L.marker([target.lat, target.lon], {
+      var targetMarker = L.marker([target.lat, target.lon], {
         icon: L.divIcon({ className: 'marker-target', html: target.id, iconSize: [26, 26] }),
         title: target.name, zIndexOffset: 400
       }).addTo(map).on('click', function () { inspect(target); });
+      scienceMarkers.push({ marker: targetMarker, target: target });
     });
   }
 
   /** One row in the layers panel: checkbox plus opacity slider. */
   function addLayerControl(spec) {
+    var saved = savedLayers[spec.key];
+    if (saved && typeof saved.on === 'boolean') spec.on = saved.on;
+    if (saved && Number.isFinite(saved.opacity)) spec.opacity = Math.max(0, Math.min(100, saved.opacity));
     var row = el('div', 'layer');
     var head = el('div', 'layer-head');
     var box = el('input');
@@ -151,15 +168,21 @@
     var output = el('output', null, spec.opacity + '%');
     sliderRow.append(slider, output);
 
-    box.addEventListener('change', function () { spec.setVisible(box.checked); });
+    function saveLayer() {
+      savedLayers[spec.key] = { on: box.checked, opacity: Number(slider.value) };
+      offline.write('layers', savedLayers);
+    }
+    box.addEventListener('change', function () { spec.setVisible(box.checked); saveLayer(); });
     slider.addEventListener('input', function () {
       output.textContent = slider.value + '%';
       spec.setOpacity(slider.value / 100);
+      saveLayer();
     });
 
     row.append(head, detail, sliderRow);
     $('layerControls').append(row);
     spec.setVisible(spec.on);
+    spec.setOpacity(spec.opacity / 100);
   }
 
   function setUpLayers() {
@@ -188,6 +211,14 @@
   var DEFAULT_HINT = 'Click a numbered marker to inspect a science stop. Click the map to read its geology.';
 
   function setUpMapEvents() {
+    map.on('moveend', function () {
+      var center = map.getCenter();
+      offline.write('map', { lat: center.lat, lon: center.lng, zoom: map.getZoom() });
+    });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('controllerchange', function () {
+      // Re-request visible tiles once the worker can cache this first visit.
+      map.eachLayer(function (layer) { if (layer instanceof L.TileLayer) layer.redraw(); });
+    });
     map.on('mousemove', function (event) {
       var point = { lat: event.latlng.lat, lon: event.latlng.lng };
       var text = formatCoords(point.lat, point.lon);
@@ -223,6 +254,97 @@
   }
 
   /* ---------- 4. Route editing ---------- */
+
+  function positionKey(stop) { return stop.lat + ',' + stop.lon; }
+
+  function refreshCrewPositions() {
+    var endpoint = state.stops[state.stops.length - 1];
+    crewPositions = [endpoint, habitat].concat(data.targets, state.stops.filter(function (s) { return s.custom; }))
+      .filter(function (stop, index, all) {
+        return all.findIndex(function (s) { return positionKey(s) === positionKey(stop); }) === index;
+      });
+    var select = $('crewPosition');
+    select.replaceChildren();
+    crewPositions.forEach(function (stop) {
+      var option = el('option', null, stop.name + (positionKey(stop) === positionKey(endpoint) ? ' (planned endpoint)' : ''));
+      option.value = positionKey(stop);
+      select.append(option);
+    });
+    if (manualPosition && crewPositions.some(function (s) { return positionKey(s) === manualPosition; })) select.value = manualPosition;
+    else { manualPosition = null; select.value = positionKey(endpoint); }
+    if (returnRoute) computeReturn();
+  }
+
+  function computeReturn() {
+    returnLayer.clearLayers();
+    var from = crewPositions.find(function (s) { return positionKey(s) === $('crewPosition').value; });
+    if (!from) return;
+    if (state.adding) $('addMode').click();
+    returnRoute = crewRouter.fastestReturn(from, habitat);
+    returnRoute.from = toStop(from);
+    var status = $('rtbStatus');
+    status.className = '';
+    $('dismissRTB').hidden = false;
+    if (!returnRoute.available) {
+      status.textContent = returnRoute.reason;
+      status.className = 'danger';
+      return;
+    }
+    if (returnRoute.atBase) { status.textContent = 'Selected position is already at the habitat.'; return; }
+    var line = returnRoute.points.map(function (p) { return [p.lat, p.lon]; });
+    L.polyline(line, { color: '#170d0c', weight: 10, interactive: false }).addTo(returnLayer);
+    L.polyline(line, { color: '#ff5c4d', weight: 6, dashArray: '12 5', interactive: false }).addTo(returnLayer);
+    map.fitBounds(L.latLngBounds(line), { padding: [40, 40], maxZoom: config.map.maxZoom });
+    var text = 'RTB from ' + from.name + ': ' + formatKm(returnRoute.distanceM) + ' · ' +
+      formatDuration(returnRoute.minutes) + ' walking. Fastest on the recorded traverse using the current walking model.';
+    if (returnRoute.connectorM > 0.01) text += '\nIncludes ' + returnRoute.connectorM.toFixed(1) +
+      ' m of unverified connections to the rover path, with the existing time penalty.';
+    text += '\nSteepest measured ground: ' + returnRoute.maxSlopeDeg.toFixed(1) + '°. Walking ETA excludes science stops and airlock operations.';
+    if (returnRoute.maxSlopeDeg >= config.slope.limitDeg) {
+      text += '\nDANGER: exceeds the configured slope limit of ' + config.slope.limitDeg + '°.';
+      status.className = 'danger';
+    } else if (returnRoute.maxSlopeDeg >= config.slope.cautionDeg || returnRoute.connectorM > 0.01) {
+      status.className = 'warning';
+    }
+    status.textContent = text;
+  }
+
+  function setGloveMode(on) {
+    document.body.classList.toggle('glove-ui', on);
+    $('gloveToggle').setAttribute('aria-pressed', String(on));
+    $('gloveToggle').textContent = 'Glove-Friendly UI: ' + (on ? 'ON' : 'OFF');
+    scienceMarkers.forEach(function (entry) {
+      entry.marker.setIcon(L.divIcon({
+        className: entry.habitat ? 'marker-habitat' : 'marker-target',
+        html: entry.habitat ? '⌂' : entry.target.id, iconSize: on ? [60, 60] : [26, 26]
+      }));
+    });
+    offline.write('glove', on);
+    map.invalidateSize();
+    if (state.summary) drawProfile(state.summary);
+  }
+
+  function setUpCrewControls() {
+    $('emergencyRTB').addEventListener('click', computeReturn);
+    $('crewPosition').addEventListener('change', function () {
+      manualPosition = $('crewPosition').value;
+      if (returnRoute) computeReturn();
+    });
+    $('dismissRTB').addEventListener('click', function () {
+      returnLayer.clearLayers(); returnRoute = null;
+      $('dismissRTB').hidden = true;
+      $('rtbStatus').className = '';
+      $('rtbStatus').textContent = 'Compute the fastest walking route to the habitat on the recorded rover traverse.';
+    });
+    $('gloveToggle').addEventListener('click', function () { setGloveMode(!document.body.classList.contains('glove-ui')); });
+    setGloveMode(offline.read('glove', false) === true);
+    function showCacheStatus() {
+      $('offlineStatus').textContent = offline.status();
+      $('offlineStatus').classList.toggle('cache-warning', offline.hasProblem());
+    }
+    offline.subscribe(showCacheStatus);
+    offline.start();
+  }
 
   function addStop(stop) {
     var last = state.stops[state.stops.length - 1];
@@ -294,6 +416,13 @@
         : stop.custom ? 'Waypoint' : 'Return';
       text.append(el('small', null, kind));
       item.append(text);
+      if (index > 0 && positionKey(stop) !== positionKey(habitat)) {
+        var log = el('button', 'route-log', 'Log');
+        log.type = 'button';
+        log.setAttribute('aria-label', 'Log sample at ' + stop.name);
+        log.addEventListener('click', function () { sampleLog.select(stop); });
+        item.append(log);
+      }
       list.append(item);
     });
     $('pointCount').textContent = state.stops.length + (state.stops.length === 1 ? ' point' : ' points');
@@ -379,18 +508,18 @@
     var ctx = canvas.getContext('2d');
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.font = '11px Consolas, monospace';
+    ctx.font = (document.body.classList.contains('glove-ui') ? '16' : '11') + 'px Consolas, monospace';
     ctx.fillStyle = '#96a19c';
     ctx.textBaseline = 'middle';
 
     var points = s.profile;
     if (points.length < 2) {
       ctx.textAlign = 'center';
-      ctx.fillText('Add a stop on the rover path to see measured elevation', width / 2, height / 2);
+      ctx.fillText(width < 500 ? 'Add a rover-path stop for elevation' : 'Add a stop on the rover path to see measured elevation', width / 2, height / 2);
       return;
     }
 
-    var left = 58, right = 12, top = 10, bottom = 20;
+    var left = document.body.classList.contains('glove-ui') ? 84 : 58, right = 12, top = 10, bottom = 24;
     var plotW = width - left - right;
     var plotH = height - top - bottom;
     var low = Infinity, high = -Infinity;
@@ -447,6 +576,9 @@
     drawBudgets(s);
     drawAlerts(s);
     drawProfile(s);
+    refreshCrewPositions();
+    if (sampleLog) sampleLog.refresh(state.stops);
+    offline.saveRoute(state.stops);
   }
 
   /* ---------- 6. Science stops ---------- */
@@ -511,6 +643,10 @@
       $('inspection').close();
     });
     box.append(add);
+    var logSample = el('button', null, 'Log sample observations');
+    logSample.type = 'button';
+    logSample.addEventListener('click', function () { $('inspection').close(); sampleLog.select(target); });
+    box.append(logSample);
     box.append(el('p', 'reserve-note', 'Images: NASA/JPL-Caltech/ASU, Mastcam-Z raw frames. Position: where the rover was parked on sol ' + target.sol + '.'));
 
     api.geologyAt(target.lat, target.lon).then(function (unit) {
@@ -613,6 +749,8 @@
       farthestFromHabitatKm: +(s.farthestM / 1000).toFixed(3),
       doseMsv: +s.doseMsv.toFixed(4),
       flags: s.flags,
+      emergencyReturn: returnRoute,
+      sampling: sampleLog.export(),
       assumptions: { walking: config.walking, slope: config.slope, eva: config.eva, radiation: config.radiation }
     };
     var url = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }));
@@ -629,6 +767,8 @@
     createMarkers();
     setUpMapEvents();
     setUpRouteButtons();
+    sampleLog = ARES.createSampleLog();
+    setUpCrewControls();
     setUpConditions();
     createTargetCards();
     $('closeDrawer').addEventListener('click', function () { $('inspection').close(); });
@@ -641,5 +781,5 @@
   start();
 
   // Handy in the browser console while developing: ARES.debug.state, ARES.debug.map
-  ARES.debug = { state: state, map: map, planner: planner };
+  ARES.debug = { state: state, map: map, planner: planner, crewRouter: crewRouter };
 })();
