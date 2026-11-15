@@ -61,7 +61,15 @@ async function run() {
     return response;
   }
   network = false;
-  assert.match(await (await request(origin,'navigate')).text(), /EMERGENCY RTB/);
+  var shell = await (await request(origin,'navigate')).text();
+  assert.match(shell, /id="emergencyRTB"/);
+  ['planTab', 'stopsTab', 'logTab', 'conditionsTab', 'layersTab', 'addMode', 'returnHome', 'export'].forEach(function (id) {
+    assert.ok(shell.includes('id="' + id + '"'), id + ' remains available offline');
+  });
+  assert.match(await (await request('js/panels.js')).text(), /function syncSuit/);
+  for (var font of ['Roboto.ttf', 'RobotoMono.ttf']) {
+    assert.ok((await (await request('assets/fonts/' + font)).arrayBuffer()).byteLength > 1000, font + ' cached offline');
+  }
   assert.match(await (await request('js/marsData.js')).text(), /ARES.data/);
   assert.match(await (await request('assets/vendor/leaflet.js')).text(), /Leaflet 1.9.4/);
   assert.equal(request('https://mars.nasa.gov/rss/api/?feed=weather'), undefined, 'weather never replayed as live');

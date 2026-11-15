@@ -43,7 +43,7 @@
 
   function formatDuration(minutes) {
     var total = Math.round(minutes);
-    return Math.floor(total / 60) + ' h ' + String(total % 60).padStart(2, '0') + ' min';
+    return Math.floor(total / 60) + ' h ' + total % 60 + ' min';
   }
 
   function formatKm(metres) { return (metres / 1000).toFixed(2) + ' km'; }
@@ -127,14 +127,14 @@
 
   function createMarkers() {
     var baseMarker = L.marker([habitat.lat, habitat.lon], {
-      icon: L.divIcon({ className: 'marker-habitat', html: '⌂', iconSize: [26, 26] }),
+      icon: L.divIcon({ className: 'marker-habitat', html: '<span class="marker-symbol">H</span>', iconSize: [48, 48] }),
       title: habitat.name, zIndexOffset: 500
     }).addTo(map).on('click', function () { addStop(habitat); });
     scienceMarkers.push({ marker: baseMarker, habitat: true });
 
     data.targets.forEach(function (target) {
       var targetMarker = L.marker([target.lat, target.lon], {
-        icon: L.divIcon({ className: 'marker-target', html: target.id, iconSize: [26, 26] }),
+        icon: L.divIcon({ className: 'marker-target', html: '<span class="marker-symbol">' + Number(target.id) + '</span>', iconSize: [48, 48] }),
         title: target.name, zIndexOffset: 400
       }).addTo(map).on('click', function () { inspect(target); });
       scienceMarkers.push({ marker: targetMarker, target: target });
@@ -208,7 +208,7 @@
 
   function setHint(text) { $('mapHint').textContent = text; }
 
-  var DEFAULT_HINT = 'Click a numbered marker to inspect a science stop. Click the map to read its geology.';
+  var DEFAULT_HINT = 'Tap a numbered marker to inspect a science stop. Tap the map to read its geology.';
 
   function setUpMapEvents() {
     map.on('moveend', function () {
@@ -244,7 +244,7 @@
       api.geologyAt(lat, lon).then(function (unit) {
         setHint(unit ? 'USGS geologic unit here: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.');
       }).catch(function () {
-        setHint('Geology lookup failed. Check the connection and click again.');
+        setHint('Geology lookup failed. Check the connection and tap again.');
       });
     });
 
@@ -295,13 +295,13 @@
     L.polyline(line, { color: '#170d0c', weight: 10, interactive: false }).addTo(returnLayer);
     L.polyline(line, { color: '#ff5c4d', weight: 6, dashArray: '12 5', interactive: false }).addTo(returnLayer);
     map.fitBounds(L.latLngBounds(line), { padding: [40, 40], maxZoom: config.map.maxZoom });
-    var text = 'RTB from ' + from.name + ': ' + formatKm(returnRoute.distanceM) + ' · ' +
+    var text = 'Return from ' + from.name + ': ' + formatKm(returnRoute.distanceM) + ' · ' +
       formatDuration(returnRoute.minutes) + ' walking. Fastest on the recorded traverse using the current walking model.';
     if (returnRoute.connectorM > 0.01) text += '\nIncludes ' + returnRoute.connectorM.toFixed(1) +
       ' m of unverified connections to the rover path, with the existing time penalty.';
     text += '\nSteepest measured ground: ' + returnRoute.maxSlopeDeg.toFixed(1) + '°. Walking ETA excludes science stops and airlock operations.';
     if (returnRoute.maxSlopeDeg >= config.slope.limitDeg) {
-      text += '\nDANGER: exceeds the configured slope limit of ' + config.slope.limitDeg + '°.';
+      text += '\nDanger: exceeds the configured slope limit of ' + config.slope.limitDeg + '°.';
       status.className = 'danger';
     } else if (returnRoute.maxSlopeDeg >= config.slope.cautionDeg || returnRoute.connectorM > 0.01) {
       status.className = 'warning';
@@ -312,11 +312,12 @@
   function setGloveMode(on) {
     document.body.classList.toggle('glove-ui', on);
     $('gloveToggle').setAttribute('aria-pressed', String(on));
-    $('gloveToggle').textContent = 'Glove-Friendly UI: ' + (on ? 'ON' : 'OFF');
+    $('gloveToggle').textContent = on ? 'Gloves on' : 'Gloves off';
     scienceMarkers.forEach(function (entry) {
       entry.marker.setIcon(L.divIcon({
         className: entry.habitat ? 'marker-habitat' : 'marker-target',
-        html: entry.habitat ? '⌂' : entry.target.id, iconSize: on ? [60, 60] : [26, 26]
+        html: '<span class="marker-symbol">' + (entry.habitat ? 'H' : Number(entry.target.id)) + '</span>',
+        iconSize: on ? [64, 64] : [48, 48]
       }));
     });
     offline.write('glove', on);
@@ -326,6 +327,7 @@
 
   function setUpCrewControls() {
     $('emergencyRTB').addEventListener('click', computeReturn);
+    $('calculateRTB').addEventListener('click', computeReturn);
     $('crewPosition').addEventListener('change', function () {
       manualPosition = $('crewPosition').value;
       if (returnRoute) computeReturn();
@@ -360,7 +362,7 @@
       $('addMode').setAttribute('aria-pressed', String(state.adding));
       $('map').classList.toggle('adding', state.adding);
       setHint(state.adding
-        ? 'Click the map to add a waypoint. Ground off the rover path counts as unverified. Press Escape to finish.'
+        ? 'Tap the map to add a waypoint. Ground off the rover path counts as unverified. Tap Add waypoint again or press Escape to finish.'
         : DEFAULT_HINT);
     });
     document.addEventListener('keydown', function (event) {
@@ -399,7 +401,7 @@
     state.stops.forEach(function (stop) {
       if (!stop.custom) return;
       L.circleMarker([stop.lat, stop.lon], {
-        radius: 6, color: '#283626', weight: 2, fillColor: '#ed9678', fillOpacity: 1
+        radius: 8, color: '#283626', weight: 2, fillColor: '#ed9678', fillOpacity: 1
       }).bindTooltip(stop.name).addTo(routeLayer);
     });
   }
@@ -409,11 +411,13 @@
     list.replaceChildren();
     state.stops.forEach(function (stop, index) {
       var item = el('li');
-      item.append(el('b', null, index === 0 ? '⌂' : String(index).padStart(2, '0')));
+      var target = data.targets.find(function (t) { return positionKey(t) === positionKey(stop); });
+      var badge = positionKey(stop) === positionKey(habitat) ? 'H' : target ? String(Number(target.id)) : 'W';
+      item.append(el('b', null, badge));
       var text = el('div', null, stop.name);
       var kind = index === 0 ? 'Airlock, start'
         : stop.stopMin ? stop.stopMin + ' min science stop'
-        : stop.custom ? 'Waypoint' : 'Return';
+        : stop.custom ? 'Waypoint' : 'Return to habitat';
       text.append(el('small', null, kind));
       item.append(text);
       if (index > 0 && positionKey(stop) !== positionKey(habitat)) {
@@ -425,7 +429,7 @@
       }
       list.append(item);
     });
-    $('pointCount').textContent = state.stops.length + (state.stops.length === 1 ? ' point' : ' points');
+    $('pointCount').textContent = state.stops.length + (state.stops.length === 1 ? ' stop' : ' stops');
   }
 
   function drawStats(s) {
@@ -454,8 +458,9 @@
     s.reserves.forEach(function (reserve) {
       var left = Math.max(0, reserve.percentLeft);
       var wrap = el('div', 'budget');
+      wrap.dataset.consumable = reserve.id;
       var labels = el('div');
-      labels.append(el('span', null, reserve.name), el('span', null, left.toFixed(0) + '%'));
+      labels.append(el('span', null, reserve.name), el('span', 'budget-value', left.toFixed(0) + '%'));
       var bar = el('div', 'bar');
       var fill = el('span', left < reservePercent ? 'low' : null);
       fill.style.width = left + '%';
@@ -463,7 +468,7 @@
       wrap.append(labels, bar);
       box.append(wrap);
     });
-    $('reserveNote').textContent = 'KEEP ' + reservePercent + '%';
+    $('reserveNote').textContent = 'Keep ' + reservePercent + '%';
   }
 
   /** Turn the planner's flags into plain sentences. */
@@ -479,7 +484,7 @@
     if (f.walkBack) alerts.push(['danger', 'Too far: ' + formatKm(s.farthestM) + ' from the habitat, walk-back limit ' + config.eva.walkBackLimitKm.toFixed(1) + ' km. This stop needs a rover.']);
     if (f.slopeCaution) alerts.push(['warn', 'Steep section: Perseverance measured ' + s.maxSlopeDeg.toFixed(0) + '° on this route. Take it slowly.']);
     if (f.unverified) alerts.push(['warn', s.unverifiedLegs + (s.unverifiedLegs === 1 ? ' leg crosses' : ' legs cross') + ' ground the rover never drove. No elevation data there; time is padded by ' + Math.round((config.walking.unverifiedPenalty - 1) * 100) + '%.']);
-    if (f.open) alerts.push(['warn', 'The route does not return to the habitat yet. Press Return.']);
+    if (f.open) alerts.push(['warn', 'The route does not return to the habitat yet. Tap Return to habitat.']);
     if (s.go && !f.slopeCaution && !f.unverified) alerts.push(['safe', 'Go. The whole route follows ground Perseverance drove and stays inside every limit.']);
     return alerts;
   }
@@ -493,9 +498,9 @@
 
     var verdict = $('verdict');
     var f = s.flags;
-    var label = f.empty ? 'DRAFT' : !s.go ? 'NO-GO' : (f.slopeCaution || f.unverified) ? 'GO WITH CAUTION' : 'GO';
+    var label = f.empty ? 'Draft' : !s.go ? 'No-go' : (f.slopeCaution || f.unverified) ? 'Go with caution' : 'Go';
     verdict.textContent = label;
-    verdict.className = 'tag ' + (label === 'NO-GO' ? 'bad' : label === 'GO' ? 'good' : label === 'DRAFT' ? '' : 'warn');
+    verdict.className = 'tag ' + (!f.empty && !s.go ? 'bad' : label === 'Go' ? 'good' : f.empty ? '' : 'warn');
   }
 
   function drawProfile(s) {
@@ -503,23 +508,25 @@
     var ratio = Math.min(2, window.devicePixelRatio || 1);
     var width = canvas.clientWidth;
     var height = canvas.clientHeight;
+    if (!width || !height) return;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
     var ctx = canvas.getContext('2d');
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.font = (document.body.classList.contains('glove-ui') ? '16' : '11') + 'px Consolas, monospace';
+    ctx.font = (document.body.classList.contains('glove-ui') ? '16' : '14') + 'px Consolas, monospace';
     ctx.fillStyle = '#96a19c';
     ctx.textBaseline = 'middle';
 
     var points = s.profile;
     if (points.length < 2) {
       ctx.textAlign = 'center';
-      ctx.fillText(width < 500 ? 'Add a rover-path stop for elevation' : 'Add a stop on the rover path to see measured elevation', width / 2, height / 2);
+      ctx.fillText('Add a rover-path stop', width / 2, height / 2 - 10);
+      ctx.fillText('to see measured elevation', width / 2, height / 2 + 12);
       return;
     }
 
-    var left = document.body.classList.contains('glove-ui') ? 84 : 58, right = 12, top = 10, bottom = 24;
+    var left = document.body.classList.contains('glove-ui') ? 84 : 76, right = 12, top = 10, bottom = 28;
     var plotW = width - left - right;
     var plotH = height - top - bottom;
     var low = Infinity, high = -Infinity;
@@ -568,7 +575,8 @@
     var s = planner.summarize(state.stops);
     state.summary = s;
     $('distance').replaceChildren(document.createTextNode((s.distanceM / 1000).toFixed(2) + ' '), el('small', null, 'km'));
-    $('duration').textContent = formatDuration(s.minutes) + ' of ' + s.limitHours.toFixed(1) + ' h';
+    $('duration').textContent = s.flags.empty ? 'Limit ' + s.limitHours.toFixed(1) + ' h'
+      : formatDuration(s.minutes) + ' of ' + s.limitHours.toFixed(1) + ' h';
     $('undo').disabled = state.stops.length === 1;
     drawRoute(s);
     drawRouteList();
@@ -588,9 +596,14 @@
       var card = el('button', 'target-card');
       card.type = 'button';
       var thumb = el('div', 'terrain-thumb');
-      thumb.append(el('span', null, target.id + ' / SOL ' + target.sol));
+      var fallback = el('img');
+      fallback.src = 'assets/jezero-delta.jpg';
+      fallback.alt = 'Jezero delta overview';
+      fallback.loading = 'lazy';
+      thumb.append(fallback, el('span', null, String(Number(target.id))));
       var body = el('div', 'target-body');
       body.append(el('small', null, target.area), el('h3', null, target.name), el('p', null, target.rock));
+      body.append(el('small', null, 'Sol ' + target.sol + ' · ' + target.stopMin + ' min stop'));
       card.append(thumb, body);
       card.addEventListener('click', function () { inspect(target); });
       $('targetCards').append(card);
@@ -602,7 +615,8 @@
         img.src = images[0].thumb;
         img.alt = 'Perseverance Mastcam-Z image, sol ' + target.sol;
         img.loading = 'lazy';
-        thumb.prepend(img);
+        img.addEventListener('error', function () { img.remove(); });
+        thumb.insertBefore(img, thumb.lastElementChild);
       }).catch(function () { /* leave the plain card */ });
     });
   }
@@ -612,7 +626,7 @@
     var box = $('drawerContent');
     box.replaceChildren();
 
-    box.append(el('div', 'eyebrow', 'SCIENCE STOP ' + target.id));
+    box.append(el('div', 'eyebrow', 'Science stop ' + Number(target.id)));
     box.append(el('h2', null, target.name));
     box.append(el('div', 'drawer-meta', target.area + ' · ' + formatCoords(target.lat, target.lon)));
 
@@ -621,29 +635,29 @@
       'Round trip from the habitat: ' + formatKm(round.distanceM) + ', ' + formatDuration(round.minutes) +
       ', steepest ' + round.maxSlopeDeg.toFixed(0) + '°'));
 
-    box.append(el('h3', null, 'ROCK'));
+    box.append(el('h3', null, 'Rock'));
     box.append(el('p', null, target.rock));
     var geology = el('p', 'live', 'USGS geologic unit: loading…');
     box.append(geology);
 
-    box.append(el('h3', null, 'WHY GO'));
+    box.append(el('h3', null, 'Why go'));
     box.append(el('p', null, target.why));
-    box.append(el('h3', null, 'WHAT TO DO THERE'));
+    box.append(el('h3', null, 'What to do there'));
     box.append(el('p', null, target.task + ' Plan ' + target.stopMin + ' minutes.'));
 
-    box.append(el('h3', null, 'WHAT PERSEVERANCE SAW, SOL ' + target.sol));
+    box.append(el('h3', null, 'What Perseverance saw, sol ' + target.sol));
     var gallery = el('div', 'gallery');
     gallery.append(el('p', 'live', 'Loading rover images…'));
     box.append(gallery);
 
-    var add = el('button', 'primary', '＋ Add to route');
+    var add = el('button', 'primary add-to-route', 'Add to route');
     add.type = 'button';
     add.addEventListener('click', function () {
       addStop(toStop(target));
       $('inspection').close();
     });
     box.append(add);
-    var logSample = el('button', null, 'Log sample observations');
+    var logSample = el('button', 'log-sample', 'Log sample observations');
     logSample.type = 'button';
     logSample.addEventListener('click', function () { $('inspection').close(); sampleLog.select(target); });
     box.append(logSample);
@@ -695,20 +709,20 @@
   }
 
   function setUpConditions() {
-    var site = conditionCell('HABITAT SITE');
+    var site = conditionCell('Habitat site');
     site.value.textContent = 'Three Forks';
     site.note.textContent = formatCoords(habitat.lat, habitat.lon);
 
-    var limit = conditionCell('EVA LIMIT');
+    var limit = conditionCell('EVA limit');
     limit.value.textContent = planner.limitHours().toFixed(1) + ' h';
-    limit.note.textContent = 'shortest consumable less ' + config.eva.reserveFraction * 100 + '% reserve';
+    limit.note.textContent = 'Suit endurance minus ' + config.eva.reserveFraction * 100 + '% reserve';
 
-    var radiation = conditionCell('SURFACE RADIATION');
+    var radiation = conditionCell('Surface radiation');
     radiation.value.textContent = config.radiation.surfaceDoseMsvPerHour + ' mSv/h';
     radiation.note.textContent = 'Curiosity RAD, ' + config.radiation.surfaceDoseMsvPerDay + ' ± ' +
       config.radiation.uncertaintyMsvPerDay + ' mSv/day (Hassler et al. 2014)';
 
-    var weather = conditionCell('MARS WEATHER · LATEST PUBLISHED');
+    var weather = conditionCell('Mars weather · latest published');
     api.latestWeather().then(function (w) {
       if (!w) { weather.value.textContent = 'No readings'; return; }
       weather.value.textContent = w.minTempC.toFixed(0) + ' to ' + w.maxTempC.toFixed(0) + ' °C' +
@@ -720,7 +734,7 @@
       weather.note.textContent = 'NASA weather feeds did not load';
     });
 
-    var space = conditionCell('SPACE WEATHER · NASA DONKI');
+    var space = conditionCell('Space weather · NASA DONKI');
     api.spaceWeather().then(function (sw) {
       space.value.textContent = sw.particleEvents
         ? sw.particleEvents + ' particle event alert' + (sw.particleEvents === 1 ? '' : 's')
@@ -740,7 +754,7 @@
   function exportPlan() {
     var s = state.summary;
     var plan = {
-      title: 'ARES Jezero EVA plan',
+      title: 'Jezero EVA plan',
       note: 'Planning concept. Terrain from NASA Perseverance waypoints; walking and suit figures are assumptions.',
       verdict: $('verdict').textContent,
       stops: state.stops,
@@ -758,7 +772,7 @@
     var url = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }));
     var link = el('a');
     link.href = url;
-    link.download = 'ares-eva-plan.json';
+    link.download = 'jezero-eva-plan.json';
     link.click();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
@@ -776,6 +790,8 @@
     $('closeDrawer').addEventListener('click', function () { $('inspection').close(); });
     $('export').addEventListener('click', exportPlan);
     window.addEventListener('resize', function () { drawProfile(state.summary); });
+    // Header wrapping and portrait stacking can resize the map without a window resize.
+    new ResizeObserver(function () { map.invalidateSize(); }).observe($('mapWrap'));
     setHint(DEFAULT_HINT);
     render();
   }

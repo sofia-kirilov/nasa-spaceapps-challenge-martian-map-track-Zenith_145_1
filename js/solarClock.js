@@ -108,7 +108,7 @@ ARES.solarClock = (function () {
     var label = document.createElement('label');
     var value = document.createElement('strong');
     var note = document.createElement('small');
-    label.textContent = 'DAYLIGHT · JEZERO SOLAR TIME';
+    label.textContent = 'Daylight · Jezero solar time';
     cell.append(label, value, note);
     strip.insertBefore(cell, strip.children[3] || null);
 

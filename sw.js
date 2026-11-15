@@ -1,13 +1,15 @@
 /* App shell + bounded cache of visited NASA tiles. Scientific files are cached verbatim. */
 'use strict';
-var SHELL = 'ares-shell-v3';
+var SHELL = 'ares-shell-v5';
 var TILES = 'ares-tiles-v1';
 var TILE_LIMIT = 240;
 var FILES = [
   './', 'index.html', 'css/styles.css', 'assets/vendor/leaflet.css', 'assets/vendor/leaflet.js',
   'js/config.js', 'js/geo.js', 'js/roverTraverse.js', 'js/marsData.js', 'js/planner.js',
   'js/nasaApi.js', 'js/offlineAssets.js', 'js/crewRouter.js', 'js/speechNotes.js',
-  'js/sampleLog.js', 'js/app.js', 'js/solarClock.js', 'assets/vendor/images/layers.png',
+  'js/sampleLog.js', 'js/app.js', 'js/solarClock.js', 'js/panels.js',
+  'assets/fonts/Roboto.ttf', 'assets/fonts/RobotoMono.ttf', 'assets/jezero-delta.jpg',
+  'assets/vendor/images/layers.png',
   'assets/vendor/images/layers-2x.png', 'assets/vendor/images/marker-icon.png',
   'assets/vendor/images/marker-icon-2x.png', 'assets/vendor/images/marker-shadow.png'
 ];

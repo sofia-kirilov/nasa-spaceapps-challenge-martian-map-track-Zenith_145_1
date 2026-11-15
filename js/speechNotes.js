@@ -52,7 +52,7 @@ ARES.createSpeechNotes = function (Recognition, handlers) {
       };
       engine.onend = function () { finish(session, 'Dictation finished. Review the text, then save your log.'); };
       active = session;
-      handlers.state(true, 'Listening… speak your geological observations.');
+      handlers.state(true, 'Listening. Describe your observations, then stop dictation to review and save.');
       engine.start();
       return true;
     } catch (error) {

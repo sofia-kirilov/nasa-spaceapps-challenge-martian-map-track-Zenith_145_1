@@ -4,166 +4,143 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#05090d">
-  <title>ARES // Surface Ops</title>
+  <title>Jezero EVA planner</title>
   <link rel="stylesheet" href="assets/vendor/leaflet.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-<main id="flightDeck" class="flight-deck" aria-label="ARES surface operations flight deck">
+<main id="flightDeck" class="flight-deck" aria-label="Jezero EVA planner">
   <header class="mission-bar">
     <div class="mission-identity">
-      <h1 class="brand">ARES <span>//</span> SURFACE OPS</h1>
-      <div class="mission-id" title="SECTOR: JEZERO CRATER - THREE FORKS">SECTOR: JEZERO CRATER - THREE FORKS</div>
+      <h1 class="brand">Jezero EVA planner</h1>
+      <p class="mission-id">Three Forks habitat</p>
     </div>
-    <div class="mission-clock" title="Mission elapsed time since this flight-deck session opened">
-      <span class="telemetry-label">MET <span class="session-label">/ SESSION</span></span>
-      <time id="missionElapsed" datetime="PT0S" aria-label="Mission elapsed time">00:00:00</time>
+    <div class="mission-summary" role="status" aria-live="polite" aria-atomic="true">
+      <strong id="verdict" class="tag">Draft</strong>
+      <span id="duration">Limit 6.4 h</span>
     </div>
-    <div class="suit-status" id="suitStatus" data-state="standby" title="Suit reserves projected by the current EVA plan">
+    <div id="suitStatus" class="suit-status" data-state="standby">
       <span class="status-light" aria-hidden="true"></span>
-      <div><span class="telemetry-label">O₂ / SUIT <span class="session-label">/ PLAN</span></span><strong id="suitReadout">-- / STANDBY</strong></div>
+      <strong id="suitReadout">Oxygen after EVA 100%</strong>
     </div>
-    <button id="gloveToggle" class="glove-toggle" type="button" aria-label="Glove mode" aria-pressed="false">Glove-Friendly UI: OFF</button>
-    <button id="emergencyRTB" type="button">EMERGENCY RTB</button>
+    <div class="mission-actions">
+      <button id="gloveToggle" class="glove-toggle" type="button" aria-pressed="false">Gloves off</button>
+      <button id="emergencyRTB" type="button" aria-controls="rtbPanel">Return to base</button>
+    </div>
   </header>
 
-  <section class="workspace" aria-label="Martian terrain and tactical consoles">
-    <section class="map-panel" aria-label="Interactive Martian terrain">
-      <div id="mapWrap">
-        <div id="map" aria-label="Map of the Jezero delta front. Click a numbered marker to inspect a science stop."></div>
-        <div class="map-reticle" aria-hidden="true"></div>
-        <div class="map-hint" id="mapHint" aria-live="polite"></div>
-        <div class="map-readout" id="readout"></div>
-      </div>
-      <div class="map-top">
-        <div><span class="status-light" aria-hidden="true"></span> TERRAIN <span class="map-sector">/ JEZERO WESTERN DELTA</span></div>
-        <button id="resetView" type="button" aria-label="Recenter terrain map">⌖ RECENTER</button>
-      </div>
-      <div class="map-bearing" aria-hidden="true"><span>N</span><i></i>0360</div>
-      <section class="profile panel" aria-label="Measured route elevation">
-        <div class="profile-title">TRAVERSE / ELEVATION <span>PERSEVERANCE · MEASURED</span></div>
-        <canvas id="profile" aria-label="Elevation along the planned route"></canvas>
-      </section>
-    </section>
-
-    <aside class="surface-dock hud-dock panel" aria-label="Surface data console">
-      <div class="dock-heading"><span>01 <span class="muted">//</span> SURFACE DATA</span><button class="dock-close" type="button" aria-label="Close surface console">×</button></div>
-      <nav class="dock-tabs" aria-label="Surface console views">
-        <button type="button" data-console="environment" aria-controls="environmentPanel" aria-pressed="true">TELEMETRY</button>
-        <button type="button" data-console="layers" aria-controls="layersPanel" aria-pressed="false">LAYERS</button>
+  <section class="workspace" aria-label="Map and EVA plan">
+    <aside class="side-panel" aria-label="EVA planning panel">
+      <nav class="panel-tabs" role="tablist" aria-label="Planner tabs">
+        <button id="planTab" type="button" role="tab" data-panel="routePanel" aria-controls="routePanel" aria-selected="true" tabindex="0">Plan</button>
+        <button id="stopsTab" type="button" role="tab" data-panel="sitesPanel" aria-controls="sitesPanel" aria-selected="false" tabindex="-1">Stops</button>
+        <button id="logTab" type="button" role="tab" data-panel="sampling" aria-controls="sampling" aria-selected="false" tabindex="-1">Log</button>
+        <button id="conditionsTab" type="button" role="tab" data-panel="environmentPanel" aria-controls="environmentPanel" aria-selected="false" tabindex="-1">Conditions</button>
+        <button id="layersTab" type="button" role="tab" data-panel="layersPanel" aria-controls="layersPanel" aria-selected="false" tabindex="-1">Layers</button>
       </nav>
-      <div class="dock-scroll" tabindex="0" aria-label="Surface data">
-        <section id="environmentPanel" data-console-group="surface" data-console-view="environment" aria-label="Site conditions">
-          <!-- Conditions are populated from the existing NASA feeds and solar clock. -->
-          <div class="conditions" id="conditions"></div>
-        </section>
-        <section id="layersPanel" class="layers" data-console-group="surface" data-console-view="layers" aria-label="Map layers" hidden>
-          <div class="panel-title"><h2>TERRAIN OVERLAYS</h2><span class="micro-label">OPACITY / %</span></div>
-          <div id="layerControls"></div>
-          <div class="legend" aria-label="Rover tilt legend">
-            <span><i class="swatch tilt-ok"></i> Rover tilt &lt; 10°</span>
-            <span><i class="swatch tilt-caution"></i> Tilt 10°–15°</span>
-            <span><i class="swatch tilt-steep"></i> Tilt &gt; 15°</span>
-          </div>
-          <details class="source-note">
-            <summary>DATA PROVENANCE</summary>
-            <p>Tiles: NASA Mars Trek. Rover stops: Perseverance waypoints, sols 13–719. Geology: USGS global geologic map.</p>
-            <a href="README.md" target="_blank" rel="noopener">Sources and method ↗</a>
-          </details>
-        </section>
-      </div>
-    </aside>
-
-    <aside class="operations-dock hud-dock panel" aria-label="EVA operations console">
-      <div class="dock-heading"><span>02 <span class="muted">//</span> EVA OPERATIONS</span><button class="dock-close" type="button" aria-label="Close operations console">×</button></div>
-      <nav class="dock-tabs" aria-label="Operations console views">
-        <button type="button" data-console="route" aria-controls="routePanel" aria-pressed="true">ROUTE</button>
-        <button type="button" data-console="sites" aria-controls="sitesPanel" aria-pressed="false">SITES</button>
-        <button type="button" data-console="sampling" aria-controls="sampling" aria-pressed="false">SAMPLE LOG</button>
-      </nav>
-      <div class="dock-scroll operations-scroll" tabindex="0" aria-label="EVA operations">
-        <section id="routePanel" class="planner" data-console-group="operations" data-console-view="route" aria-label="EVA plan">
-          <div class="panel-title"><h2>TRAVERSE PLAN</h2><span class="tag" id="verdict">DRAFT</span></div>
+      <div class="panel-scroll">
+        <section id="routePanel" role="tabpanel" aria-labelledby="planTab" tabindex="0">
+          <div id="alerts" role="status" aria-live="polite"></div>
           <div class="route-summary">
-            <strong id="distance">0.00 <small>km</small></strong>
-            <div>PLANNED DISTANCE<br><span id="duration"></span></div>
+            <div><h2>Distance</h2><strong id="distance">0.00 <small>km</small></strong></div>
+            <span id="pointCount" class="muted">1 stop</span>
           </div>
-          <div class="budget-title">SUIT RESERVES <span id="reserveNote"></span></div>
-          <div id="budgets"></div>
           <div class="route-actions">
-            <button id="addMode" class="primary" type="button" aria-pressed="false">＋ Add waypoint</button>
-            <button id="returnHome" type="button">⌂ Return</button>
+            <button id="addMode" class="primary" type="button" aria-pressed="false">Add waypoint</button>
+            <button id="returnHome" type="button">Return to habitat</button>
           </div>
-          <div class="plan-label">ROUTE <span id="pointCount"></span></div>
-          <ol id="routeList" aria-label="Planned waypoints"></ol>
+          <h2 class="plan-label">Route stops</h2>
+          <ol id="routeList" aria-label="Planned route stops"></ol>
           <div class="small-actions">
-            <button id="undo" type="button">↶ Undo</button>
+            <button id="undo" type="button">Undo</button>
             <button id="clear" type="button">Clear</button>
             <button id="demo" type="button">Load example</button>
           </div>
-          <details class="route-metrics">
-            <summary>TRAVERSE METRICS</summary>
-            <div class="stats" id="stats"></div>
-          </details>
-          <div id="alerts" aria-live="polite"></div>
-          <section class="rtb-panel" aria-label="Emergency return to base">
-            <div class="rtb-position">
-              <label for="crewPosition">RTB ORIGIN / MANUAL POSITION</label>
-              <select id="crewPosition" aria-describedby="positionNote"></select>
-              <p id="positionNote">Planned endpoint by default. Select your actual waypoint.</p>
-            </div>
-            <div id="rtbStatus" role="status">RTB uses the recorded rover traverse. Position is manually selected.</div>
-            <button id="dismissRTB" type="button" hidden>Dismiss return overlay</button>
+          <h2 class="budget-title">Suit reserves <span id="reserveNote">Keep 20%</span></h2>
+          <div id="budgets"></div>
+          <section class="profile" aria-labelledby="profileTitle">
+            <h2 id="profileTitle" class="profile-title">Elevation <span>Rover measurements</span></h2>
+            <canvas id="profile" role="img" aria-label="Route elevation profile"></canvas>
           </section>
-          <button class="export" id="export" type="button">↓ Export plan (JSON)</button>
+          <details class="route-metrics">
+            <summary>Route details</summary>
+            <div id="stats" class="stats"></div>
+          </details>
+          <section id="rtbPanel" class="rtb-panel" aria-labelledby="rtbTitle">
+            <h2 id="rtbTitle">Return to base</h2>
+            <div class="rtb-position">
+              <label for="crewPosition">Crew position · manual</label>
+              <select id="crewPosition" aria-describedby="positionNote"></select>
+              <p id="positionNote">Select your actual stop. The default is the planned endpoint; there is no live position feed.</p>
+            </div>
+            <button id="calculateRTB" type="button">Calculate return route</button>
+            <p id="rtbStatus" role="status">Compute the fastest walking route to the habitat on the recorded rover traverse.</p>
+            <button id="dismissRTB" type="button" hidden>Dismiss return route</button>
+          </section>
+          <button id="export" class="export" type="button">Export plan (JSON)</button>
         </section>
 
-        <section id="sitesPanel" class="targets" data-console-group="operations" data-console-view="sites" aria-labelledby="sitesTitle" hidden>
-          <div class="panel-title"><h2 id="sitesTitle">SCIENCE TARGETS</h2><span class="micro-label">SELECT TO INSPECT</span></div>
-          <!-- Keep the startup hook used by app.js without restoring the editorial introduction. -->
-          <span id="scienceGoal" hidden></span>
+        <section id="sitesPanel" role="tabpanel" aria-labelledby="stopsTab" tabindex="0" hidden>
+          <p id="scienceGoal"></p>
           <div id="targetCards"></div>
         </section>
 
-        <section id="sampling" class="sampling" data-console-group="operations" data-console-view="sampling" aria-labelledby="samplingTitle" hidden>
-          <div class="panel-title"><h2 id="samplingTitle">GEOLOGICAL SAMPLE LOG</h2><span id="sampleCount" class="tag">0 logs</span></div>
+        <section id="sampling" role="tabpanel" aria-labelledby="logTab" tabindex="0" hidden>
+          <div class="panel-title"><h2>Sample log</h2><span id="sampleCount" class="muted">0 logs</span></div>
           <div class="sample-grid">
             <div>
-              <label for="sampleWaypoint">SAMPLING WAYPOINT</label>
-              <select id="sampleWaypoint"></select>
-              <p id="sampleLocation" class="drawer-meta"></p>
+              <label for="sampleWaypoint">Stop</label>
+              <select id="sampleWaypoint" aria-describedby="sampleLocation"></select>
+              <p id="sampleLocation" class="muted"></p>
               <div class="dictation-actions">
-                <button id="startDictation" type="button">Start voice note</button>
+                <button id="startDictation" type="button">Start dictation</button>
                 <button id="stopDictation" type="button" disabled>Stop dictation</button>
               </div>
               <p id="speechStatus" role="status"></p>
               <p id="speechInterim" aria-live="off"></p>
-              <label for="sampleText">OBSERVATIONS / REVIEW BEFORE SAVING</label>
+              <label for="sampleText">Observations · review before saving</label>
               <textarea id="sampleText" rows="5" placeholder="Rock texture, bedding, sample ID, collection method…" aria-describedby="sampleHelp"></textarea>
-              <p id="sampleHelp" class="muted">Logs and drafts stay on this device and export with the plan. Audio is transcribed, not recorded.</p>
+              <p id="sampleHelp" class="muted">Notes and drafts stay on this device and export with the plan. Dictation saves text; audio is not recorded.</p>
               <button id="saveSample" class="primary" type="button">Save sample log</button>
             </div>
-            <ol id="sampleLogs" aria-label="Saved logs for the selected waypoint"></ol>
+            <ol id="sampleLogs" aria-label="Saved logs for the selected stop"></ol>
           </div>
+        </section>
+
+        <section id="environmentPanel" role="tabpanel" aria-labelledby="conditionsTab" tabindex="0" hidden>
+          <h2>Conditions</h2>
+          <div id="conditions" class="conditions"></div>
+          <p id="offlineStatus" role="status">Preparing local map and waypoint cache…</p>
+        </section>
+
+        <section id="layersPanel" role="tabpanel" aria-labelledby="layersTab" tabindex="0" hidden>
+          <h2>Map layers</h2>
+          <div id="layerControls"></div>
+          <div class="legend" aria-label="Rover tilt legend">
+            <span><i class="swatch tilt-ok" aria-hidden="true"></i>Tilt below 10°</span>
+            <span><i class="swatch tilt-caution" aria-hidden="true"></i>Tilt from 10° to caution limit</span>
+            <span><i class="swatch tilt-steep" aria-hidden="true"></i>Tilt at or above caution limit</span>
+          </div>
+          <details class="source-note">
+            <summary>Data sources and assumptions</summary>
+            <p>Imagery: NASA Mars Trek. Elevation and tilt: Perseverance's recorded traverse. Geology: USGS global map, coarse at this scale.</p>
+            <p>Route checks use every layer's data even when hidden. Ground away from the rover path has no measured elevation.</p>
+            <p>This is an educational planning concept. Walking speed, suit limits and safety margins are model assumptions.</p>
+          </details>
         </section>
       </div>
     </aside>
-  </section>
 
-  <div class="system-bar">
-    <nav class="console-launcher" aria-label="Open tactical console">
-      <button type="button" data-console="environment" aria-controls="environmentPanel" aria-pressed="false">ENV</button>
-      <button type="button" data-console="layers" aria-controls="layersPanel" aria-pressed="false">LAYERS</button>
-      <button type="button" data-console="route" aria-controls="routePanel" aria-pressed="false">ROUTE</button>
-      <button type="button" data-console="sites" aria-controls="sitesPanel" aria-pressed="false">SITES</button>
-      <button type="button" data-console="sampling" aria-controls="sampling" aria-pressed="false">LOG</button>
-    </nav>
-    <p id="offlineStatus" role="status">Preparing local map and waypoint cache…</p>
-    <span class="system-mode">LOCAL OPS <span aria-hidden="true">//</span> MARS 2020</span>
-  </div>
+    <section class="map-panel" aria-label="Jezero terrain map">
+      <div class="map-toolbar"><span>Jezero Crater</span><button id="resetView" type="button">Reset view</button></div>
+      <p id="mapHint" class="map-hint"></p>
+      <div id="mapWrap"><div id="map" aria-label="Interactive Mars map"></div></div>
+      <p id="readout" class="map-readout" aria-live="off"></p>
+    </section>
+  </section>
 </main>
 
-<dialog id="inspection" aria-label="Science target inspection">
+<dialog id="inspection" aria-label="Science stop inspection">
   <button id="closeDrawer" type="button" aria-label="Close inspection">×</button>
   <div id="drawerContent"></div>
 </dialog>
@@ -182,97 +159,6 @@
 <script src="js/sampleLog.js"></script>
 <script src="js/app.js"></script>
 <script src="js/solarClock.js"></script>
-<script>
-/* Presentation only: console navigation, session MET and a mirror of existing suit reserves. */
-(function () {
-  'use strict';
-  var elapsed = document.getElementById('missionElapsed');
-  var startedAt = performance.now();
-  function tick() {
-    var seconds = Math.floor((performance.now() - startedAt) / 1000);
-    elapsed.textContent = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
-      .map(function (value) { return String(value).padStart(2, '0'); }).join(':');
-    elapsed.dateTime = 'PT' + seconds + 'S';
-  }
-  tick();
-  setInterval(tick, 1000);
-
-  var compact = window.matchMedia('(max-width: 1100px)');
-  var panels = Array.from(document.querySelectorAll('[data-console-view]'));
-  var controls = Array.from(document.querySelectorAll('[data-console]'));
-  var openDock = '';
-  function syncControls() {
-    controls.forEach(function (button) {
-      var panel = panels.find(function (item) { return item.dataset.consoleView === button.dataset.console; });
-      var shown = !panel.hidden;
-      if (button.closest('.console-launcher') && compact.matches) shown = shown && openDock === panel.dataset.consoleGroup;
-      button.setAttribute('aria-pressed', String(shown));
-    });
-  }
-  function showConsole(view, toggle) {
-    var panel = panels.find(function (item) { return item.dataset.consoleView === view; });
-    if (!panel) return;
-    var group = panel.dataset.consoleGroup;
-    openDock = toggle && !panel.hidden && openDock === group ? '' : group;
-    document.body.dataset.openDock = openDock;
-    panels.forEach(function (item) {
-      if (item.dataset.consoleGroup === group) item.hidden = item !== panel;
-    });
-    panel.closest('.dock-scroll').scrollTop = 0;
-    syncControls();
-  }
-  controls.forEach(function (button) {
-    button.addEventListener('click', function () {
-      showConsole(button.dataset.console, !!button.closest('.console-launcher'));
-    });
-  });
-  function closeConsole() {
-    var active = document.activeElement;
-    var dock = active && active.closest('.hud-dock');
-    var selected = dock && dock.querySelector('[data-console-view]:not([hidden])');
-    openDock = '';
-    delete document.body.dataset.openDock;
-    syncControls();
-    if (compact.matches && selected) {
-      document.querySelector('.console-launcher [data-console="' + selected.dataset.consoleView + '"]').focus();
-    }
-  }
-  document.querySelectorAll('.dock-close').forEach(function (button) { button.addEventListener('click', closeConsole); });
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && !document.getElementById('inspection').open) closeConsole();
-  });
-  compact.addEventListener('change', syncControls);
-  syncControls();
-
-  // Reveal the sample console before the existing logger moves keyboard focus into it.
-  document.addEventListener('click', function (event) {
-    var button = event.target.closest('button');
-    if (button && (button.matches('.route-log') || button.matches('#drawerContent > button:not(.primary)'))) {
-      showConsole('sampling', false);
-    }
-    if (button && button.id === 'emergencyRTB') {
-      showConsole('route', false);
-      requestAnimationFrame(function () {
-        document.querySelector('.rtb-panel').scrollIntoView({ block: 'nearest' });
-      });
-    }
-  }, true);
-
-  function syncSuit() {
-    var budgets = Array.from(document.querySelectorAll('#budgets .budget'));
-    var oxygen = budgets.find(function (budget) { return budget.firstElementChild.firstElementChild.textContent === 'Oxygen'; });
-    var status = document.getElementById('suitStatus');
-    var readout = document.getElementById('suitReadout');
-    if (!oxygen) return;
-    var low = budgets.some(function (budget) { return !!budget.querySelector('.low'); });
-    status.dataset.state = low ? 'low' : 'nominal';
-    readout.textContent = oxygen.firstElementChild.lastElementChild.textContent + (low ? ' / LOW' : ' / RESERVE');
-    status.setAttribute('aria-label', 'Planned oxygen reserve ' + oxygen.firstElementChild.lastElementChild.textContent +
-      (low ? '. Suit reserve below configured margin.' : '. Suit reserves within configured margin.'));
-  }
-  new MutationObserver(syncSuit).observe(document.getElementById('budgets'), { childList: true, subtree: true, characterData: true });
-  syncSuit();
-})();
-</script>
+<script src="js/panels.js"></script>
 </body>
 </html>
