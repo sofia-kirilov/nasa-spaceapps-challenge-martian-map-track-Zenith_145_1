@@ -16,15 +16,19 @@
       <p class="mission-id">Three Forks habitat</p>
     </div>
     <div class="mission-summary" role="status" aria-live="polite" aria-atomic="true">
-      <strong id="verdict" class="tag">Draft</strong>
+      <strong id="verdict" class="tag">No plan yet</strong>
       <span id="duration">Limit 6.4 h</span>
     </div>
     <div id="suitStatus" class="suit-status" data-state="standby">
       <span class="status-light" aria-hidden="true"></span>
       <strong id="suitReadout">Oxygen after EVA 100%</strong>
     </div>
+    <div id="solarStatus" class="solar-status" aria-label="Jezero local solar time">
+      <span class="solar-label">Daylight at Jezero</span>
+      <strong id="solarTime">--:-- LTST</strong>
+      <span id="solarNote">Calculating solar time…</span>
+    </div>
     <div class="mission-actions">
-      <button id="gloveToggle" class="glove-toggle" type="button" aria-pressed="false">Gloves off</button>
       <button id="emergencyRTB" type="button" aria-controls="rtbPanel">Return to base</button>
     </div>
   </header>
@@ -49,12 +53,12 @@
             <button id="addMode" class="primary" type="button" aria-pressed="false">Add waypoint</button>
             <button id="returnHome" type="button">Return to habitat</button>
           </div>
+          <button id="sendToHud" class="hud-launch" type="button" aria-haspopup="dialog" aria-controls="hudView">Send to HUD</button>
           <h2 class="plan-label">Route stops</h2>
           <ol id="routeList" aria-label="Planned route stops"></ol>
           <div class="small-actions">
             <button id="undo" type="button">Undo</button>
             <button id="clear" type="button">Clear</button>
-            <button id="demo" type="button">Load example</button>
           </div>
           <h2 class="budget-title">Suit reserves <span id="reserveNote">Keep 20%</span></h2>
           <div id="budgets"></div>
@@ -145,6 +149,31 @@
   <div id="drawerContent"></div>
 </dialog>
 
+<dialog id="hudView" class="hud-view" aria-labelledby="hudTitle" aria-describedby="hudContext">
+  <div class="visor-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <header class="hud-header">
+    <div><h2 id="hudTitle">Visor simulation</h2><p id="hudContext">Plan estimates · manual position · no live suit feed</p></div>
+    <button id="closeHud" type="button" autofocus>Close HUD View</button>
+  </header>
+  <div class="hud-telemetry" role="status" aria-live="polite" aria-atomic="true">
+    <div class="hud-reading"><span>O₂ at position · estimate</span><strong id="hudOxygen">--</strong><small id="hudOxygenNote"></small></div>
+    <div class="hud-reading"><span>Return to base</span><strong id="hudReturn">--</strong><small id="hudReturnNote"></small></div>
+    <div class="hud-reading"><span>Next waypoint</span><strong id="hudDistance">--</strong><small id="hudWaypoint"></small></div>
+  </div>
+  <figure class="hud-map">
+    <figcaption>Route preview · <span id="hudVerdict">No plan yet</span></figcaption>
+    <svg id="hudMiniMap" viewBox="0 0 260 160" role="img" aria-label="Planned route, habitat and selected crew position. North is up.">
+      <path id="hudPlanPath" class="hud-plan-path"></path>
+      <path id="hudReturnPath" class="hud-return-path"></path>
+      <rect id="hudBaseMarker" width="10" height="10" class="hud-base-marker"></rect>
+      <circle id="hudPositionMarker" r="6" class="hud-position-marker"></circle>
+      <text x="238" y="20">N ↑</text>
+    </svg>
+    <p id="hudPosition"></p>
+    <small>Hollow square: habitat · dot: crew</small>
+  </figure>
+</dialog>
+
 <!-- Order matters: config and data first, then logic, then the UI. -->
 <script src="assets/vendor/leaflet.js"></script>
 <script src="js/offlineAssets.js"></script>
@@ -157,6 +186,7 @@
 <script src="js/nasaApi.js"></script>
 <script src="js/speechNotes.js"></script>
 <script src="js/sampleLog.js"></script>
+<script src="js/hud.js"></script>
 <script src="js/app.js"></script>
 <script src="js/solarClock.js"></script>
 <script src="js/panels.js"></script>

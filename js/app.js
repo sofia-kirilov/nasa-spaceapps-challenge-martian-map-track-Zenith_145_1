@@ -23,7 +23,7 @@
   var crewPositions = [];
   var manualPosition = null;
   var returnRoute = null;
-  var scienceMarkers = [];
+  var hud = ARES.createHud(config, data.habitat);
   var savedMap = offline.read('map', {});
   if (!savedMap || typeof savedMap !== 'object') savedMap = {};
   var savedLayers = offline.read('layers', {});
@@ -126,18 +126,16 @@
   }
 
   function createMarkers() {
-    var baseMarker = L.marker([habitat.lat, habitat.lon], {
-      icon: L.divIcon({ className: 'marker-habitat', html: '<span class="marker-symbol">H</span>', iconSize: [48, 48] }),
+    L.marker([habitat.lat, habitat.lon], {
+      icon: L.divIcon({ className: 'marker-habitat', html: '<span class="marker-symbol">H</span>', iconSize: [64, 64] }),
       title: habitat.name, zIndexOffset: 500
     }).addTo(map).on('click', function () { addStop(habitat); });
-    scienceMarkers.push({ marker: baseMarker, habitat: true });
 
     data.targets.forEach(function (target) {
-      var targetMarker = L.marker([target.lat, target.lon], {
-        icon: L.divIcon({ className: 'marker-target', html: '<span class="marker-symbol">' + Number(target.id) + '</span>', iconSize: [48, 48] }),
+      L.marker([target.lat, target.lon], {
+        icon: L.divIcon({ className: 'marker-target', html: '<span class="marker-symbol">' + Number(target.id) + '</span>', iconSize: [64, 64] }),
         title: target.name, zIndexOffset: 400
       }).addTo(map).on('click', function () { inspect(target); });
-      scienceMarkers.push({ marker: targetMarker, target: target });
     });
   }
 
@@ -273,6 +271,19 @@
     if (manualPosition && crewPositions.some(function (s) { return positionKey(s) === manualPosition; })) select.value = manualPosition;
     else { manualPosition = null; select.value = positionKey(endpoint); }
     if (returnRoute) computeReturn();
+    else updateHud();
+  }
+
+  function updateHud() {
+    var position = crewPositions.find(function (stop) { return positionKey(stop) === $('crewPosition').value; });
+    if (!position || !state.summary) return;
+    // The default represents the route endpoint. An explicit manual selection
+    // represents the first visit to that stop (including departure at habitat).
+    var index = manualPosition ? state.stops.findIndex(function (stop) {
+      return positionKey(stop) === positionKey(position);
+    }) : state.stops.length - 1;
+    hud.update({ stops: state.stops, summary: state.summary, position: position, routeIndex: index,
+      returnRoute: returnRoute || crewRouter.fastestReturn(position, habitat) });
   }
 
   function computeReturn() {
@@ -282,6 +293,7 @@
     if (state.adding) $('addMode').click();
     returnRoute = crewRouter.fastestReturn(from, habitat);
     returnRoute.from = toStop(from);
+    updateHud();
     var status = $('rtbStatus');
     status.className = '';
     $('dismissRTB').hidden = false;
@@ -309,37 +321,26 @@
     status.textContent = text;
   }
 
-  function setGloveMode(on) {
-    document.body.classList.toggle('glove-ui', on);
-    $('gloveToggle').setAttribute('aria-pressed', String(on));
-    $('gloveToggle').textContent = on ? 'Gloves on' : 'Gloves off';
-    scienceMarkers.forEach(function (entry) {
-      entry.marker.setIcon(L.divIcon({
-        className: entry.habitat ? 'marker-habitat' : 'marker-target',
-        html: '<span class="marker-symbol">' + (entry.habitat ? 'H' : Number(entry.target.id)) + '</span>',
-        iconSize: on ? [64, 64] : [48, 48]
-      }));
-    });
-    offline.write('glove', on);
-    map.invalidateSize();
-    if (state.summary) drawProfile(state.summary);
-  }
-
   function setUpCrewControls() {
     $('emergencyRTB').addEventListener('click', computeReturn);
     $('calculateRTB').addEventListener('click', computeReturn);
     $('crewPosition').addEventListener('change', function () {
       manualPosition = $('crewPosition').value;
       if (returnRoute) computeReturn();
+      else updateHud();
     });
     $('dismissRTB').addEventListener('click', function () {
       returnLayer.clearLayers(); returnRoute = null;
       $('dismissRTB').hidden = true;
       $('rtbStatus').className = '';
       $('rtbStatus').textContent = 'Compute the fastest walking route to the habitat on the recorded rover traverse.';
+      updateHud();
     });
-    $('gloveToggle').addEventListener('click', function () { setGloveMode(!document.body.classList.contains('glove-ui')); });
-    setGloveMode(offline.read('glove', false) === true);
+    $('sendToHud').addEventListener('click', function () {
+      if (state.adding) $('addMode').click();
+      updateHud();
+      hud.open();
+    });
     function showCacheStatus() {
       $('offlineStatus').textContent = offline.status();
       $('offlineStatus').classList.toggle('cache-warning', offline.hasProblem());
@@ -375,13 +376,6 @@
     });
     $('clear').addEventListener('click', function () {
       state.stops = [habitat];
-      render();
-    });
-    $('demo').addEventListener('click', function () {
-      var pick = function (id) {
-        return toStop(data.targets.filter(function (t) { return t.id === id; })[0]);
-      };
-      state.stops = [habitat, pick('02'), pick('03'), pick('01'), habitat];
       render();
     });
   }
@@ -498,9 +492,9 @@
 
     var verdict = $('verdict');
     var f = s.flags;
-    var label = f.empty ? 'Draft' : !s.go ? 'No-go' : (f.slopeCaution || f.unverified) ? 'Go with caution' : 'Go';
+    var label = s.verdict;
     verdict.textContent = label;
-    verdict.className = 'tag ' + (!f.empty && !s.go ? 'bad' : label === 'Go' ? 'good' : f.empty ? '' : 'warn');
+    verdict.className = 'tag ' + (label === 'No-go' ? 'bad' : label === 'Go' ? 'good' : f.empty ? '' : 'warn');
   }
 
   function drawProfile(s) {
@@ -514,7 +508,7 @@
     var ctx = canvas.getContext('2d');
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    ctx.font = (document.body.classList.contains('glove-ui') ? '16' : '14') + 'px Consolas, monospace';
+    ctx.font = '16px Consolas, monospace';
     ctx.fillStyle = '#96a19c';
     ctx.textBaseline = 'middle';
 
@@ -526,7 +520,7 @@
       return;
     }
 
-    var left = document.body.classList.contains('glove-ui') ? 84 : 76, right = 12, top = 10, bottom = 28;
+    var left = 84, right = 12, top = 10, bottom = 28;
     var plotW = width - left - right;
     var plotH = height - top - bottom;
     var low = Infinity, high = -Infinity;
@@ -587,6 +581,7 @@
     refreshCrewPositions();
     if (sampleLog) sampleLog.refresh(state.stops);
     offline.saveRoute(state.stops);
+    window.dispatchEvent(new CustomEvent('ares:planchange', { detail: s }));
   }
 
   /* ---------- 6. Science stops ---------- */

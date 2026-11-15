@@ -132,6 +132,11 @@ ARES.createPlanner = function (config, waypoints) {
       open: legs.length > 0 && !s.closed
     };
     s.go = !s.flags.empty && !s.flags.overLimit && !s.flags.slopeLimit && !s.flags.walkBack && !s.flags.open;
+    // An unfinished return leg is a draft warning, not a breached safety limit.
+    // `go` still means a complete route; `verdict` also describes work in progress.
+    s.verdict = s.flags.empty ? 'No plan yet'
+      : (s.flags.overLimit || s.flags.slopeLimit || s.flags.walkBack) ? 'No-go'
+      : (s.flags.open || s.flags.slopeCaution || s.flags.unverified) ? 'Go with caution' : 'Go';
     return s;
   }
 

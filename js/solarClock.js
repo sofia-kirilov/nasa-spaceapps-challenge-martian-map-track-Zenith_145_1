@@ -100,40 +100,38 @@ ARES.solarClock = (function () {
   }
 
     function mount() {
-    var strip = typeof document !== 'undefined' && document.getElementById('conditions');
+    var strip = typeof document !== 'undefined' && document.getElementById('solarStatus');
     var habitat = ARES.data && ARES.data.habitat;
     if (!strip || !habitat) return;
 
-    var cell = document.createElement('div');
-    var label = document.createElement('label');
-    var value = document.createElement('strong');
-    var note = document.createElement('small');
-    label.textContent = 'Daylight · Jezero solar time';
-    cell.append(label, value, note);
-    strip.insertBefore(cell, strip.children[3] || null);
+    var value = document.getElementById('solarTime');
+    var note = document.getElementById('solarNote');
+    var summary = ARES.debug && ARES.debug.state.summary;
 
     function draw() {
       var now = new Date();
       var d = daylight(now, habitat.lat, habitat.lon);
-      var text = formatClock(d.ltst);
+      var text = '';
       if (d.polar) text += d.polar === 'day' ? ' · sun up all sol' : ' · sun down all sol';
       else if (d.isDay) text += ' · sunset in ' + formatDuration(d.earthMinToSunset);
       else text += ' · dark, sunrise in ' + formatDuration(d.earthMinToSunrise);
-      value.textContent = text;
+      value.textContent = formatClock(d.ltst) + ' LTST';
+      note.textContent = text.replace(/^ · /, '');
 
-      var s = ARES.debug && ARES.debug.state && ARES.debug.state.summary;
+      var s = summary;
       if (s && !s.flags.empty && s.hours > 0) {
         var eva = checkEva(now, habitat.lat, habitat.lon, s.hours);
-        value.className = eva.ok ? 'good' : 'bad';
-        note.textContent = 'EVA starting now: ' + eva.reason;
+        value.className = eva.ok ? 'good' : 'warn';
+        strip.title = 'EVA starting now: ' + eva.reason;
       } else {
-        value.className = d.isDay ? 'good' : 'bad';
-        note.textContent = d.polar ? d.season
+        value.className = d.isDay ? 'good' : 'warn';
+        strip.title = d.polar ? d.season
           : 'sunrise ' + formatClock(d.sunrise) + ', sunset ' + formatClock(d.sunset) + ' · ' + d.season;
       }
     }
 
     draw();
+    window.addEventListener('ares:planchange', function (event) { summary = event.detail; draw(); });
     setInterval(draw, 5000);
   }
 
