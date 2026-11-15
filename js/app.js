@@ -705,18 +705,19 @@
 
     var radiation = conditionCell('SURFACE RADIATION');
     radiation.value.textContent = config.radiation.surfaceDoseMsvPerHour + ' mSv/h';
-    radiation.note.textContent = 'Curiosity RAD average';
+    radiation.note.textContent = 'Curiosity RAD, ' + config.radiation.surfaceDoseMsvPerDay + ' ± ' +
+      config.radiation.uncertaintyMsvPerDay + ' mSv/day (Hassler et al. 2014)';
 
-    var weather = conditionCell('WEATHER · PERSEVERANCE MEDA');
+    var weather = conditionCell('MARS WEATHER · LATEST PUBLISHED');
     api.latestWeather().then(function (w) {
       if (!w) { weather.value.textContent = 'No readings'; return; }
       weather.value.textContent = w.minTempC.toFixed(0) + ' to ' + w.maxTempC.toFixed(0) + ' °C' +
         (w.pressurePa ? ' · ' + w.pressurePa.toFixed(0) + ' Pa' : '');
-      weather.note.textContent = 'latest published sol ' + w.sol + ' (' + w.earthDate + ') · daylight ' +
-        w.sunrise.slice(0, 5) + ' to ' + w.sunset.slice(0, 5);
+      weather.note.textContent = w.station + ', ' + w.site + ' · sol ' + w.sol + ' (' + w.earthDate + ')' +
+        (w.sunrise && w.sunset ? ' · daylight ' + w.sunrise.slice(0, 5) + ' to ' + w.sunset.slice(0, 5) : '');
     }).catch(function () {
       weather.value.textContent = 'Unavailable';
-      weather.note.textContent = 'MEDA feed did not load';
+      weather.note.textContent = 'NASA weather feeds did not load';
     });
 
     var space = conditionCell('SPACE WEATHER · NASA DONKI');
@@ -726,10 +727,11 @@
         : 'No particle events';
       space.value.className = sw.particleEvents ? 'bad' : 'good';
       space.note.textContent = sw.total + (sw.total === 1 ? ' notice in ' : ' notices in ') +
-        config.api.spaceWeatherDays + ' days, Sun-wide, not Mars-specific';
+        config.api.spaceWeatherDays + ' days, Sun-wide, not Mars-specific' +
+        (sw.fetchedAt ? ' · checked ' + new Date(sw.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
     }).catch(function () {
       space.value.textContent = 'Unavailable';
-      space.note.textContent = 'DONKI did not load (the demo key allows 30 requests an hour)';
+      space.note.textContent = 'DONKI did not load (the shared demo key allows 30 requests an hour)';
     });
   }
 

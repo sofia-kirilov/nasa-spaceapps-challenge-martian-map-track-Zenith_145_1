@@ -1,6 +1,6 @@
 /* App shell + bounded cache of visited NASA tiles. Scientific files are cached verbatim. */
 'use strict';
-var SHELL = 'ares-shell-v1';
+var SHELL = 'ares-shell-v2';
 var TILES = 'ares-tiles-v1';
 var TILE_LIMIT = 240;
 var FILES = [

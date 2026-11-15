@@ -59,21 +59,43 @@ ARES.api = (function () {
     });
   }
 
-  /** Most recent sol in the Perseverance MEDA weather feed that has real readings. */
-  function latestWeather() {
-    var url = cfg.marsRss + '?feed=weather&category=mars2020&feedtype=json';
+  var num = function (v) { var n = typeof v === 'number' ? v : parseFloat(v); return isFinite(n) ? n : null; };
+
+  /** Newest sol with real temperatures from one rover's weather feed, or null. */
+  function roverWeather(category, station, site) {
+    var url = cfg.marsRss + '?feed=weather&category=' + category + '&feedtype=json';
     return getJson(url).then(function (json) {
-      var sols = (json.sols || []).filter(function (s) {
-        return typeof s.min_temp === 'number' && typeof s.max_temp === 'number';
+      var best = null;
+      (json.sols || json.soles || []).forEach(function (s) {
+        if (num(s.min_temp) === null || num(s.max_temp) === null) return;
+        if (!best || String(s.terrestrial_date) > String(best.terrestrial_date)) best = s;
       });
-      if (!sols.length) return null;
-      var s = sols[sols.length - 1];
+      if (!best) return null;
       return {
-        sol: s.sol, earthDate: s.terrestrial_date, season: s.season,
-        minTempC: s.min_temp, maxTempC: s.max_temp,
-        pressurePa: typeof s.pressure === 'number' ? s.pressure : null,
-        sunrise: s.sunrise, sunset: s.sunset
+        station: station, site: site,
+        sol: best.sol, earthDate: best.terrestrial_date, season: best.season,
+        minTempC: num(best.min_temp), maxTempC: num(best.max_temp),
+        pressurePa: num(best.pressure),
+        sunrise: best.sunrise || '', sunset: best.sunset || ''
       };
+    }).catch(function () { return null; });
+  }
+
+  /**
+   * Most recent Mars surface weather NASA publishes. Perseverance MEDA is the
+   * station at Jezero, but its public feed stopped in April 2024, so Curiosity
+   * REMS (Gale Crater) is used when it is newer. Resolves the newer reading,
+   * labelled with its station and site, or null.
+   */
+  function latestWeather() {
+    return Promise.all([
+      roverWeather('mars2020', 'Perseverance MEDA', 'Jezero Crater'),
+      roverWeather('msl', 'Curiosity REMS', 'Gale Crater')
+    ]).then(function (readings) {
+      readings = readings.filter(Boolean);
+      if (!readings.length) return null;
+      readings.sort(function (a, b) { return String(b.earthDate).localeCompare(String(a.earthDate)); });
+      return readings[0];
     });
   }
 
@@ -88,15 +110,36 @@ ARES.api = (function () {
     var start = new Date(end.getTime() - cfg.spaceWeatherDays * 86400000);
     var url = cfg.donki + '?startDate=' + day(start) + '&endDate=' + day(end) +
       '&type=all&api_key=' + cfg.nasaKey;
-    return getJson(url).then(function (list) {
+    var key = 'ares.spaceWeather';
+    var maxAgeMs = (cfg.spaceWeatherCacheMin || 0) * 60000;
+    var summarize = function (list, fetchedAt) {
       list = Array.isArray(list) ? list : [];
       var particle = list.filter(function (n) { return n.messageType === 'SEP'; });
       var latest = list[0] || null;
       return {
         total: list.length,
         particleEvents: particle.length,
+        fetchedAt: fetchedAt,
         latest: latest ? { type: latest.messageType, time: latest.messageIssueTime, url: latest.messageURL } : null
       };
+    };
+    // A recent answer saved in this browser is reused, so reloading the page
+    // does not spend another request. It is always shown with its check time.
+    try {
+      var saved = JSON.parse(localStorage.getItem(key));
+      if (saved && Date.now() - saved.at < maxAgeMs) return Promise.resolve(summarize(saved.list, saved.at));
+    } catch (e) { /* storage unavailable: just fetch */ }
+    return getJson(url).then(function (list) {
+      var at = Date.now();
+      try {
+        localStorage.setItem(key, JSON.stringify({
+          at: at,
+          list: (Array.isArray(list) ? list : []).map(function (n) {
+            return { messageType: n.messageType, messageIssueTime: n.messageIssueTime, messageURL: n.messageURL };
+          })
+        }));
+      } catch (e) { /* ignore */ }
+      return summarize(list, at);
     });
   }
 

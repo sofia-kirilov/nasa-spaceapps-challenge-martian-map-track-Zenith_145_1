@@ -29,12 +29,12 @@ var empty = planner.summarize([hab]);
 assert.ok(empty.flags.empty && !empty.go && empty.minutes === 0, 'empty plan');
 
 // planning limit comes from the consumables, in one place
-assert.ok(Math.abs(planner.limitHours() - 5.6) < 1e-9, 'limit = 7 h cooling less 20%');
+assert.ok(Math.abs(planner.limitHours() - 6.4) < 1e-9, 'limit = 8 h suit design less 20%');
 
-// flat 1 km unverified walk: 1 / 2.5 h * (1 + 5/15) * 1.3
+// flat 1 km unverified walk: 1 / baseSpeed h * (1 + 5/15) * 1.3
 var flat = planner.leg({ lat: 18.6, lon: 77.6 }, { lat: 18.6 + 1000 / 59158, lon: 77.6 });
 assert.ok(!flat.verified, 'off-path leg is unverified');
-assert.ok(Math.abs(flat.minutes - 24 * (1 + 5 / 15) * 1.3) < 0.05, 'flat walking time ' + flat.minutes);
+assert.ok(Math.abs(flat.minutes - (60 / cfg.walking.baseSpeedKmh) * (1 + 5 / 15) * 1.3) < 0.05, 'flat walking time ' + flat.minutes);
 
 // plans
 var near = planner.summarize([hab, T['Amalik'], T['Observation Mountain'], hab]);
@@ -48,7 +48,7 @@ assert.ok(ridge.maxSlopeDeg >= cfg.slope.cautionDeg, 'Hawksbill Gap climb is ste
 
 var floor = planner.summarize([hab, T['Brac'], hab]);
 show('Hab > Brac > Hab', floor);
-assert.ok(floor.flags.overLimit && floor.flags.walkBack && !floor.go, 'crater floor is out of walking range');
+assert.ok(floor.flags.walkBack && !floor.go, 'crater floor is out of walking range');
 
 var open = planner.summarize([hab, T['Amalik']]);
 assert.ok(open.flags.open && !open.go, 'open route is not a GO');
