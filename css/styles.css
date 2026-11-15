@@ -56,12 +56,12 @@ h1 em { font-style: normal; color: #a8b2a7; }
 
 /* ---------- Site conditions strip ---------- */
 .conditions {
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 18px; /* six cells: two rows of three */
   border: 1px solid var(--line); border-radius: 5px; background: #151d20;
   margin-bottom: 20px; padding: 16px 0;
 }
 .conditions > div { padding: 0 20px; border-right: 1px solid var(--line); min-width: 0; }
-.conditions > div:last-child { border: 0; }
+.conditions > div:last-child, .conditions > div:nth-child(3n) { border: 0; }
 .conditions strong { display: block; font: 21px var(--display); letter-spacing: .5px; }
 .conditions small { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
