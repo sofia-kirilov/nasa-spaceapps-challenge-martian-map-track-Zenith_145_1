@@ -347,3 +347,11 @@ summary, select, textarea, .layer-head label { min-width: var(--target-size); }
 .uplink-actions button { flex: 1; }
 .weather-history { margin-top: 8px; }
 .weather-history summary { cursor: pointer; color: var(--accent); font-family: var(--mono); padding: 8px 0; }
+
+/* Visor background: the view through the helmet. The edge shading keeps the
+   readouts legible over a bright photo. Swap the file name to change the picture. */
+.hud-view {
+  background:
+    radial-gradient(ellipse at center, transparent 35%, #030e17c0 100%),
+    url('../MarsHelmetViewPlaceholder.jpg') center / cover no-repeat #1a120d;
+}
