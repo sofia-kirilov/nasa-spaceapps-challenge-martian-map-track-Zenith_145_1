@@ -700,7 +700,7 @@
     var note = el('small', null, '');
     cell.append(value, note);
     $('conditions').append(cell);
-    return { value: value, note: note };
+    return { cell: cell, label: cell.firstChild, value: value, note: note };
   }
 
   function setUpConditions() {
@@ -717,9 +717,32 @@
     radiation.note.textContent = 'Curiosity RAD, ' + config.radiation.surfaceDoseMsvPerDay + ' ± ' +
       config.radiation.uncertaintyMsvPerDay + ' mSv/day (Hassler et al. 2014)';
 
+    // Weather measured by Perseverance, from NASA's archive (data/medaJezero.js).
+    var archive = ARES.medaArchive;
+    if (archive && archive.sols.length) {
+      var newest = archive.sols[archive.sols.length - 1];
+      var archived = conditionCell('Archived Perseverance weather · ' + archive.site);
+      archived.value.textContent = newest.airTempC.min.toFixed(0) + ' to ' + newest.airTempC.max.toFixed(0) + ' °C air · ' +
+        newest.pressurePa.min + ' to ' + newest.pressurePa.max + ' Pa';
+      archived.note.textContent = 'Sol ' + newest.sol + ' (' + newest.earthDate + ') · ground ' +
+        newest.groundTempC.min.toFixed(0) + ' to ' + newest.groundTempC.max.toFixed(0) + ' °C · ' + archive.station +
+        ' · NASA PDS archive, not live · rover was on higher ground than Three Forks';
+      var history = el('details', 'weather-history');
+      history.append(el('summary', null, 'Sols ' + archive.sols[0].sol + ' to ' + newest.sol));
+      archive.sols.slice().reverse().forEach(function (day) {
+        var row = el('div', 'stat');
+        row.append(el('span', null, 'Sol ' + day.sol + ' · ' + day.earthDate),
+          el('span', null, day.airTempC.min.toFixed(0) + ' to ' + day.airTempC.max.toFixed(0) + ' °C · ' + day.pressurePa.mean + ' Pa'));
+        history.append(row);
+      });
+      archived.cell.append(history);
+    }
+
     var weather = conditionCell('Mars weather · latest published');
     api.latestWeather().then(function (w) {
       if (!w) { weather.value.textContent = 'No readings'; return; }
+      // Say plainly when the newest feed is from another crater.
+      if (w.site !== 'Jezero Crater') weather.label.textContent = w.site + ' weather · not Jezero · latest published';
       weather.value.textContent = w.minTempC.toFixed(0) + ' to ' + w.maxTempC.toFixed(0) + ' °C' +
         (w.pressurePa ? ' · ' + w.pressurePa.toFixed(0) + ' Pa' : '');
       weather.note.textContent = w.station + ', ' + w.site + ' · sol ' + w.sol + ' (' + w.earthDate + ')' +
@@ -789,6 +812,19 @@
     new ResizeObserver(function () { map.invalidateSize(); }).observe($('mapWrap'));
     setHint(DEFAULT_HINT);
     render();
+    // Mission control / crew stations: js/uplink.js sends and receives whole routes.
+    ARES.createUplink({
+      getPlan: function () { return { stops: state.stops, summary: state.summary }; },
+      loadPlan: function (stops) {
+        var atHabitat = stops.length && positionKey(stops[0]) === positionKey(habitat);
+        state.stops = (atHabitat ? [] : [habitat]).concat(stops);
+        state.stops[0] = habitat;
+        manualPosition = null;
+        returnRoute = null;
+        render();
+      },
+      openHud: function () { $('sendToHud').click(); }
+    });
   }
 
   start();

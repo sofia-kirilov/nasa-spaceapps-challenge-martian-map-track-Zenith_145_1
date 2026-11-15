@@ -329,3 +329,21 @@ summary, select, textarea, .layer-head label { min-width: var(--target-size); }
   .hud-map { position: relative; top: auto; right: auto; grid-row: 2; margin-left: auto; }
   .hud-telemetry { position: static; grid-row: 3; }
 }
+
+/* ---------- Stations and route uplink (js/uplink.js) ---------- */
+.station-switch { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.station-switch span { color: var(--muted); font-family: var(--mono); margin-right: auto; }
+.station-switch button { min-height: 48px; padding: 6px 12px; }
+.station-switch button[aria-pressed="true"] { color: #05090d; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.uplink-status { margin: 8px 0 0; color: var(--muted); font-size: .9em; }
+.uplink-status:empty { display: none; }
+.uplink-status.good { color: var(--accent); }
+.uplink-status.warn { color: var(--warn); }
+.uplink-inbox { margin-bottom: 12px; padding: 12px; border: 1px solid var(--accent); border-left-width: 4px; background: #6be3ee10; }
+.uplink-inbox h2 { margin: 0 0 6px; color: var(--accent); font-family: var(--mono); font-size: 1em; }
+.uplink-inbox p { margin: 0 0 6px; }
+#uplinkSummary { font-family: var(--mono); color: var(--text); }
+.uplink-actions { display: flex; gap: 8px; margin-top: 10px; }
+.uplink-actions button { flex: 1; }
+.weather-history { margin-top: 8px; }
+.weather-history summary { cursor: pointer; color: var(--accent); font-family: var(--mono); padding: 8px 0; }
