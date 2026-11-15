@@ -63,10 +63,11 @@ async function run() {
   network = false;
   var shell = await (await request(origin,'navigate')).text();
   assert.match(shell, /id="emergencyRTB"/);
-  ['planTab', 'stopsTab', 'logTab', 'conditionsTab', 'layersTab', 'addMode', 'returnHome', 'export', 'sendToHud', 'hudView', 'solarTime'].forEach(function (id) {
+  ['planTab', 'stopsTab', 'logTab', 'conditionsTab', 'layersTab', 'addMode', 'returnHome', 'export', 'sendToHud', 'hudView', 'solarTime', 'startRoute', 'activeNavigation', 'simulationElapsed', 'navigationProgress'].forEach(function (id) {
     assert.ok(shell.includes('id="' + id + '"'), id + ' remains available offline');
   });
-  assert.match(await (await request('js/panels.js')).text(), /function syncSuit/);
+  assert.match(await (await request('js/panels.js')).text(), /function showPanel/);
+  assert.match(await (await request('js/navigation.js')).text(), /ARES.createNavigation/);
   assert.match(await (await request('js/hud.js')).text(), /ARES.createHud/);
   assert.match(await (await request('js/solarClock.js')).text(), /getElementById\('solarStatus'\)/);
   for (var font of ['Roboto.ttf', 'RobotoMono.ttf']) {

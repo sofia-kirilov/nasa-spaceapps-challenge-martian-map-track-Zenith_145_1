@@ -20,8 +20,10 @@
   var crewRouter = ARES.createCrewRouter(config, waypoints);
   var offline = ARES.offline;
   var sampleLog;
-  var crewPositions = [];
-  var manualPosition = null;
+  var navigation = ARES.createNavigation(config, waypoints);
+  var navigationLayer;
+  var positionMarker;
+  var lastTick = Date.now();
   var returnRoute = null;
   var hud = ARES.createHud(config, data.habitat);
   var savedMap = offline.read('map', {});
@@ -82,6 +84,7 @@
 
   var routeLayer = L.layerGroup().addTo(map);
   var returnLayer = L.layerGroup().addTo(map);
+  navigationLayer = L.layerGroup().addTo(map);
 
   /** Build one Leaflet tile layer from a marsData.tileLayers entry. */
   function createTileLayer(layer, zIndex) {
@@ -255,87 +258,155 @@
 
   function positionKey(stop) { return stop.lat + ',' + stop.lon; }
 
-  function refreshCrewPositions() {
-    var endpoint = state.stops[state.stops.length - 1];
-    crewPositions = [endpoint, habitat].concat(data.targets, state.stops.filter(function (s) { return s.custom; }))
-      .filter(function (stop, index, all) {
-        return all.findIndex(function (s) { return positionKey(s) === positionKey(stop); }) === index;
-      });
-    var select = $('crewPosition');
-    select.replaceChildren();
-    crewPositions.forEach(function (stop) {
-      var option = el('option', null, stop.name + (positionKey(stop) === positionKey(endpoint) ? ' (planned endpoint)' : ''));
-      option.value = positionKey(stop);
-      select.append(option);
-    });
-    if (manualPosition && crewPositions.some(function (s) { return positionKey(s) === manualPosition; })) select.value = manualPosition;
-    else { manualPosition = null; select.value = positionKey(endpoint); }
-    if (returnRoute) computeReturn();
-    else updateHud();
-  }
-
   function updateHud() {
-    var position = crewPositions.find(function (stop) { return positionKey(stop) === $('crewPosition').value; });
-    if (!position || !state.summary) return;
-    // The default represents the route endpoint. An explicit manual selection
-    // represents the first visit to that stop (including departure at habitat).
-    var index = manualPosition ? state.stops.findIndex(function (stop) {
-      return positionKey(stop) === positionKey(position);
-    }) : state.stops.length - 1;
-    hud.update({ stops: state.stops, summary: state.summary, position: position, routeIndex: index,
-      returnRoute: returnRoute || crewRouter.fastestReturn(position, habitat) });
+    if (!state.summary) return;
+    var active = navigation.snapshot();
+    var position = active ? active.position : habitat;
+    hud.update({ stops: state.stops, summary: state.summary, position: position,
+      routeIndex: active ? active.routeIndex : 0, navigation: active,
+      returnRoute: crewRouter.fastestReturn(position, habitat) });
   }
 
-  function computeReturn() {
+  function drawReturn() {
     returnLayer.clearLayers();
-    var from = crewPositions.find(function (s) { return positionKey(s) === $('crewPosition').value; });
-    if (!from) return;
-    if (state.adding) $('addMode').click();
-    returnRoute = crewRouter.fastestReturn(from, habitat);
-    returnRoute.from = toStop(from);
-    updateHud();
-    var status = $('rtbStatus');
-    status.className = '';
-    $('dismissRTB').hidden = false;
-    if (!returnRoute.available) {
-      status.textContent = returnRoute.reason;
-      status.className = 'danger';
-      return;
-    }
-    if (returnRoute.atBase) { status.textContent = 'Selected position is already at the habitat.'; return; }
+    if (!returnRoute || !returnRoute.available || returnRoute.atBase) return;
     var line = returnRoute.points.map(function (p) { return [p.lat, p.lon]; });
     L.polyline(line, { color: '#170d0c', weight: 10, interactive: false }).addTo(returnLayer);
     L.polyline(line, { color: '#ff5c4d', weight: 6, dashArray: '12 5', interactive: false }).addTo(returnLayer);
     map.fitBounds(L.latLngBounds(line), { padding: [40, 40], maxZoom: config.map.maxZoom });
-    var text = 'Return from ' + from.name + ': ' + formatKm(returnRoute.distanceM) + ' · ' +
-      formatDuration(returnRoute.minutes) + ' walking. Fastest on the recorded traverse using the current walking model.';
-    if (returnRoute.connectorM > 0.01) text += '\nIncludes ' + returnRoute.connectorM.toFixed(1) +
-      ' m of unverified connections to the rover path, with the existing time penalty.';
-    text += '\nSteepest measured ground: ' + returnRoute.maxSlopeDeg.toFixed(1) + '°. Walking ETA excludes science stops and airlock operations.';
-    if (returnRoute.maxSlopeDeg >= config.slope.limitDeg) {
+  }
+
+  function computeReturn() {
+    var active = navigation.snapshot();
+    var status = $('rtbStatus');
+    $('rtbPanel').hidden = false;
+    status.className = '';
+    if (!active) {
+      status.textContent = 'Start a route first. Return to base uses your current simulated position.';
+      $('navigationStatus').textContent = status.textContent;
+      return;
+    }
+    var result = crewRouter.fastestReturn(active.position, habitat);
+    if (!result.available) {
+      // Keep the locked plan and exact position; no teleporting to a nearby stop.
+      if (!active.paused) navigation.togglePause();
+      updateNavigation();
+      status.textContent = result.reason + ' Navigation is paused at your current position.';
+      status.className = 'danger';
+      return;
+    }
+    if (result.atBase) {
+      if (!active.paused) navigation.togglePause();
+      updateNavigation();
+      status.textContent = 'You are already at Three Forks habitat. End navigation to edit your plan.';
+      return;
+    }
+    result.from = Object.assign({}, active.position);
+    returnRoute = result;
+    drawReturn();
+    var text = 'Returning from your current simulated position: ' + formatKm(result.distanceM) +
+      ' · ' + formatDuration(result.minutes) + ' walking. Fastest on the recorded traverse using the current walking model.';
+    if (result.connectorM > 0.01) text += '\nIncludes ' + result.connectorM.toFixed(1) + ' m of unverified connections to the rover path.';
+    text += '\nSteepest measured ground: ' + result.maxSlopeDeg.toFixed(1) + '°. ETA excludes science stops and airlock operations.';
+    if (result.maxSlopeDeg >= config.slope.limitDeg) {
       text += '\nDanger: exceeds the configured slope limit of ' + config.slope.limitDeg + '°.';
       status.className = 'danger';
-    } else if (returnRoute.maxSlopeDeg >= config.slope.cautionDeg || returnRoute.connectorM > 0.01) {
-      status.className = 'warning';
-    }
+    } else if (result.maxSlopeDeg >= config.slope.cautionDeg || result.connectorM > 0.01) status.className = 'warning';
+    if (config.eva.consumables.some(function (c) {
+      return (active.totalElapsedMin + result.minutes) / 60 > c.enduranceH * (1 - config.eva.reserveFraction);
+    })) { text += '\nWarning: modeled return puts suit reserves at risk.'; status.className = 'danger'; }
     status.textContent = text;
+    result.statusText = text; result.statusClass = status.className;
+    navigation.beginReturn(result);
+    lastTick = Date.now();
+    updateNavigation();
+  }
+
+  function updateNavigation(persist) {
+    var active = navigation.snapshot();
+    var locked = !!active;
+    $('startRoute').hidden = locked;
+    $('activeNavigation').hidden = !locked;
+    $('startRoute').disabled = state.summary.flags.empty || state.summary.verdict === 'No-go' || state.summary.minutes <= 0;
+    ['addMode', 'returnHome', 'clear'].forEach(function (id) { $(id).disabled = locked; });
+    $('undo').disabled = locked || state.stops.length === 1;
+    document.querySelectorAll('.add-to-route').forEach(function (button) { button.disabled = locked; });
+    if (active) {
+      $('navigationMode').textContent = active.complete ? (active.mode === 'return' ? 'Arrived at habitat' : 'Traverse complete')
+        : active.mode === 'return' ? 'Returning to base' : 'EVA active';
+      $('navigationPercent').textContent = Math.floor(active.percent) + '%';
+      $('navigationProgress').value = active.percent;
+      $('navigationNext').textContent = active.complete ? 'End navigation to unlock route editing.'
+        : active.phase === 'airlock' ? 'Airlock preparation at Three Forks'
+        : active.phase === 'science' ? 'Science stop · ' + active.nextName
+        : 'Next · ' + active.nextName + ' · ' + formatKm(active.nextDistanceM);
+      $('navigationRemaining').textContent = formatKm(active.remainingDistanceM) + ' remaining · ' + formatDuration(active.remainingMin);
+      $('navigationPosition').textContent = formatCoords(active.position.lat, active.position.lon);
+      $('navigationStatus').textContent = active.complete ? 'Simulated route complete. Your original plan is saved.'
+        : 'Route locked · simulated position · ' + (active.paused ? 'paused' : 'navigation in progress');
+      $('simulationElapsed').max = String(active.totalMin);
+      $('simulationElapsed').value = String(active.elapsedMin);
+      $('simulationTime').textContent = formatDuration(active.elapsedMin);
+      $('pauseNavigation').textContent = active.paused ? 'Resume simulation' : 'Pause simulation';
+      $('pauseNavigation').disabled = active.complete;
+      var latlng = [active.position.lat, active.position.lon];
+      if (!positionMarker) positionMarker = L.marker(latlng, {
+        icon: L.divIcon({ className: 'navigation-marker', html: '<span aria-hidden="true">↑</span>', iconSize: [40, 40], iconAnchor: [20, 20] }),
+        title: 'Current simulated astronaut position', interactive: false, zIndexOffset: 1000
+      }).addTo(navigationLayer);
+      else positionMarker.setLatLng(latlng);
+      var oxygen = config.eva.consumables.find(function (c) { return c.id === 'oxygen'; });
+      var percent = Math.max(0, 100 * (1 - active.totalElapsedMin / 60 / oxygen.enduranceH));
+      setSuit('Suit oxygen ' + Math.round(percent) + '% · simulated', percent < config.eva.reserveFraction * 100);
+    } else {
+      navigationLayer.clearLayers(); positionMarker = null;
+      $('navigationStatus').textContent = state.summary.verdict === 'No-go' ? 'Resolve the route safety limits before starting.'
+        : state.summary.flags.empty ? 'Add a stop, review route safety, then start your EVA.' : 'Ready to start. Review the safety notes above.';
+      setSuit('Suit oxygen 100% · at habitat', false);
+    }
+    updateHud();
+    if (persist !== false) offline.write('navigation', navigation.export());
+  }
+
+  function setSuit(text, low) {
+    $('suitReadout').textContent = text;
+    $('suitStatus').dataset.state = low ? 'low' : 'nominal';
+    $('suitStatus').setAttribute('aria-label', text);
   }
 
   function setUpCrewControls() {
     $('emergencyRTB').addEventListener('click', computeReturn);
-    $('calculateRTB').addEventListener('click', computeReturn);
-    $('crewPosition').addEventListener('change', function () {
-      manualPosition = $('crewPosition').value;
-      if (returnRoute) computeReturn();
-      else updateHud();
+    $('startRoute').addEventListener('click', function () {
+      if (!navigation.start(state.stops, state.summary)) return;
+      if (state.adding) { state.adding = false; $('addMode').classList.remove('selected'); $('addMode').setAttribute('aria-pressed', 'false'); $('map').classList.remove('adding'); }
+      setHint('Simulated EVA active. The cyan arrow marks your position. Return to base navigates home from here.');
+      lastTick = Date.now();
+      updateNavigation();
+      $('pauseNavigation').focus({ preventScroll: true });
     });
-    $('dismissRTB').addEventListener('click', function () {
-      returnLayer.clearLayers(); returnRoute = null;
-      $('dismissRTB').hidden = true;
+    $('pauseNavigation').addEventListener('click', function () { navigation.togglePause(); lastTick = Date.now(); updateNavigation(); });
+    $('simulationElapsed').addEventListener('input', function () {
+      var active = navigation.snapshot();
+      if (active && !active.paused) navigation.togglePause();
+      navigation.seek(Number($('simulationElapsed').value));
+      lastTick = Date.now(); updateNavigation();
+    });
+    $('endNavigation').addEventListener('click', function () {
+      navigation.end(); returnRoute = null; returnLayer.clearLayers();
+      $('rtbPanel').hidden = true;
       $('rtbStatus').className = '';
-      $('rtbStatus').textContent = 'Compute the fastest walking route to the habitat on the recorded rover traverse.';
-      updateHud();
+      $('rtbStatus').textContent = 'Start a route, then use Return to base to navigate home from your simulated position.';
+      setHint(DEFAULT_HINT); updateNavigation(); $('startRoute').focus({ preventScroll: true });
     });
+    setInterval(function () {
+      var now = Date.now();
+      // Simulation advances only while this page is visible; no background EVA jumps.
+      var delta = document.hidden ? 0 : Math.min(2, Math.max(0, (now - lastTick) / 1000));
+      lastTick = now;
+      var active = navigation.snapshot();
+      if (active && !active.paused && delta > 0) { navigation.advance(delta); updateNavigation(); }
+    }, 1000);
+    document.addEventListener('visibilitychange', function () { lastTick = Date.now(); });
     $('sendToHud').addEventListener('click', function () {
       if (state.adding) $('addMode').click();
       updateHud();
@@ -350,6 +421,7 @@
   }
 
   function addStop(stop) {
+    if (navigation.snapshot()) return;
     var last = state.stops[state.stops.length - 1];
     if (last.lat === stop.lat && last.lon === stop.lon) return; // already there
     state.stops.push(stop);
@@ -358,6 +430,7 @@
 
   function setUpRouteButtons() {
     $('addMode').addEventListener('click', function () {
+      if (navigation.snapshot()) return;
       state.adding = !state.adding;
       $('addMode').classList.toggle('selected', state.adding);
       $('addMode').setAttribute('aria-pressed', String(state.adding));
@@ -371,10 +444,12 @@
     });
     $('returnHome').addEventListener('click', function () { addStop(habitat); });
     $('undo').addEventListener('click', function () {
+      if (navigation.snapshot()) return;
       if (state.stops.length > 1) state.stops.pop();
       render();
     });
     $('clear').addEventListener('click', function () {
+      if (navigation.snapshot()) return;
       state.stops = [habitat];
       render();
     });
@@ -578,7 +653,7 @@
     drawBudgets(s);
     drawAlerts(s);
     drawProfile(s);
-    refreshCrewPositions();
+    updateNavigation();
     if (sampleLog) sampleLog.refresh(state.stops);
     offline.saveRoute(state.stops);
     window.dispatchEvent(new CustomEvent('ares:planchange', { detail: s }));
@@ -647,6 +722,7 @@
 
     var add = el('button', 'primary add-to-route', 'Add to route');
     add.type = 'button';
+    add.disabled = !!navigation.snapshot();
     add.addEventListener('click', function () {
       addStop(toStop(target));
       $('inspection').close();
@@ -784,6 +860,7 @@
       doseMsv: +s.doseMsv.toFixed(4),
       flags: s.flags,
       emergencyReturn: returnRoute,
+      navigation: navigation.export(),
       sampling: sampleLog.export(),
       assumptions: { walking: config.walking, slope: config.slope, eva: config.eva, radiation: config.radiation }
     };
@@ -811,24 +888,30 @@
     // Header wrapping and portrait stacking can resize the map without a window resize.
     new ResizeObserver(function () { map.invalidateSize(); }).observe($('mapWrap'));
     setHint(DEFAULT_HINT);
+    var saved = offline.read('navigation', null);
     render();
-    // Mission control / crew stations: js/uplink.js sends and receives whole routes.
-    ARES.createUplink({
-      getPlan: function () { return { stops: state.stops, summary: state.summary }; },
-      loadPlan: function (stops) {
-        var atHabitat = stops.length && positionKey(stops[0]) === positionKey(habitat);
-        state.stops = (atHabitat ? [] : [habitat]).concat(stops);
-        state.stops[0] = habitat;
-        manualPosition = null;
-        returnRoute = null;
-        render();
-      },
-      openHud: function () { $('sendToHud').click(); }
-    });
+    var samePlan = saved && Array.isArray(saved.stops) && saved.stops.length === state.stops.length &&
+      saved.stops.every(function (stop, index) {
+        var current = state.stops[index];
+        return stop && stop.lat === current.lat && stop.lon === current.lon && stop.name === current.name &&
+          (stop.stopMin || 0) === (current.stopMin || 0);
+      });
+    if (samePlan && navigation.restore(saved)) {
+      returnRoute = navigation.export().returnRoute;
+      render(); drawReturn();
+      if (returnRoute) {
+        $('rtbPanel').hidden = false;
+        $('rtbStatus').textContent = returnRoute.statusText || 'Saved return route restored. Resume the simulation to navigate home.';
+        $('rtbStatus').className = returnRoute.statusClass || '';
+      }
+      setHint('Saved simulation restored and paused. Resume navigation when ready.');
+    } else if (saved) {
+      $('navigationStatus').textContent = 'The saved simulation no longer matches the current route or data. Review your plan and start again.';
+    }
   }
 
   start();
 
   // Handy in the browser console while developing: ARES.debug.state, ARES.debug.map
-  ARES.debug = { state: state, map: map, planner: planner, crewRouter: crewRouter };
+  ARES.debug = { state: state, map: map, planner: planner, crewRouter: crewRouter, navigation: navigation };
 })();

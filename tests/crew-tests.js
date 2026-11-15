@@ -109,6 +109,7 @@ function Element(tag) {
   this.tag = tag; this.value = ''; this.children = []; this.handlers = {}; this.textContent = '';
   this.classList = { toggle: function () {} };
 }
+Element.prototype.setAttribute = function (key, value) { this[key] = value; };
 Element.prototype.append = function () {
   var self = this;
   Array.from(arguments).forEach(function (child) {
@@ -157,5 +158,46 @@ elements.saveSample.handlers.click();
 assert.equal(elements.sampleText.value, 'Pending regolith observation', 'failed save retains draft');
 assert.equal(logger.export().logs.length, 1, 'failed save does not report a saved log');
 assert.match(elements.speechStatus.textContent, /Could not save/);
-console.log('Crew routes, cache integrity, sample persistence and speech lifecycle tests passed.');
+// Deletion must persist atomically and survive reload, including storage failures.
+context.localStorage = storage;
+logger.select(A.data.targets[0]);
+var deleteButton = elements.sampleLogs.children[0].children[0].children[1];
+context.localStorage = { getItem: storage.getItem, setItem: function () { throw new Error('blocked'); } };
+deleteButton.handlers.click();
+assert.equal(logger.export().logs.length, 1, 'failed deletion keeps the saved log');
+assert.match(elements.speechStatus.textContent, /Could not delete/);
+context.localStorage = storage;
+deleteButton.handlers.click();
+assert.equal(logger.export().logs.length, 0, 'delete removes the exact saved entry');
+logger = A.createSampleLog(); logger.refresh([A.data.habitat]);
+assert.equal(logger.export().logs.length, 0, 'deletion survives reload');
+// A network failure keeps its notice after onend, ignores late results and allows retry.
+speech.start('target:01');
+var failingEngine = engines[engines.length - 1];
+failingEngine.onerror({error:'network'});
+failingEngine.onend();
+assert.equal(speech.isActive(), false);
+assert.equal(states[states.length - 1][1], 'Speech recognition unavailable offline — tap to type');
+var beforeLate = texts.length;
+failingEngine.onresult({resultIndex:0,results:[finalResult]});
+assert.equal(texts.length, beforeLate);
+context.navigator.onLine = false;
+assert.equal(speech.start('target:01'), false);
+assert.equal(states[states.length - 1][1], 'Speech recognition unavailable offline — tap to type');
+context.navigator.onLine = true;
+assert.equal(speech.start('target:01'), true, 'dictation can retry after recovery'); speech.cancel();
+// The actual logging UI retains the draft and exposes manual entry while offline.
+context.SpeechRecognition = Recognition;
+logger = A.createSampleLog(); logger.refresh([A.data.habitat]);
+elements.sampleText.value = 'Offline typed observation'; elements.sampleText.handlers.input();
+context.navigator.onLine = false;
+elements.startDictation.handlers.click();
+assert.equal(elements.speechStatus.textContent, 'Speech recognition unavailable offline — tap to type');
+assert.equal(elements.typeSample.hidden, false);
+assert.equal(elements.saveSample.disabled, false);
+assert.equal(elements.sampleText.value, 'Offline typed observation');
+elements.typeSample.handlers.click(); elements.saveSample.handlers.click();
+assert.equal(logger.export().logs[0].text, 'Offline typed observation');
+context.navigator.onLine = true;
+console.log('Crew routes, cache integrity, sample persistence/deletion and speech fallback tests passed.');
 

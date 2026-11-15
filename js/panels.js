@@ -1,4 +1,4 @@
-/* Presentation only: accessible tabs and a mirror of the planner's oxygen reserve. */
+/* Accessible tab switching and route/log focus handoffs. */
 (function () {
   'use strict';
   var tabs = Array.from(document.querySelectorAll('[role="tab"][data-panel]'));
@@ -43,25 +43,11 @@
     if (button.id === 'emergencyRTB') {
       showPanel('routePanel', false);
       requestAnimationFrame(function () {
-        document.getElementById('rtbPanel').scrollIntoView({ block: 'start' });
-        document.getElementById('crewPosition').focus({ preventScroll: true });
+        document.getElementById('navigationStatus').scrollIntoView({ block: 'center' });
+        document.getElementById('navigationStatus').focus({ preventScroll: true });
       });
     }
   }, true);
 
-  function syncSuit() {
-    var oxygen = document.querySelector('#budgets [data-consumable="oxygen"]');
-    if (!oxygen) return;
-    var low = !!oxygen.querySelector('.low');
-    var text = 'Oxygen after EVA ' + oxygen.querySelector('.budget-value').textContent +
-      (low ? ', below reserve' : '');
-    var status = document.getElementById('suitStatus');
-    status.dataset.state = low ? 'low' : 'nominal';
-    document.getElementById('suitReadout').textContent = text;
-    status.setAttribute('aria-label', text);
-  }
-  new MutationObserver(syncSuit).observe(document.getElementById('budgets'), {
-    childList: true, subtree: true, characterData: true
-  });
-  syncSuit();
+  // Suit telemetry is updated by the active navigation session in app.js.
 })();

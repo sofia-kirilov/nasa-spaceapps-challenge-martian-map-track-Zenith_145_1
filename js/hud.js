@@ -5,11 +5,13 @@ ARES.hudTelemetry = function (config, snapshot) {
   'use strict';
   var s = snapshot.summary;
   var index = snapshot.routeIndex;
-  var known = index >= 0 && index < snapshot.stops.length;
+  var active = snapshot.navigation;
+  var known = !!active || index >= 0 && index < snapshot.stops.length;
   var elapsedMin = index > 0 ? s.airlockMin : 0;
-  if (known) s.legs.slice(0, index).forEach(function (leg) {
+  if (known && !active) s.legs.slice(0, index).forEach(function (leg) {
     elapsedMin += leg.minutes + (leg.to.stopMin || 0);
   });
+  if (active) elapsedMin = active.totalElapsedMin;
   var oxygen = config.eva.consumables.find(function (c) { return c.id === 'oxygen'; });
   var percent = known && oxygen ? Math.max(0, 100 * (1 - elapsedMin / 60 / oxygen.enduranceH)) : null;
   var r = snapshot.returnRoute;
@@ -30,8 +32,8 @@ ARES.hudTelemetry = function (config, snapshot) {
     returnNote: !r.available ? r.reason : r.atBase ? 'Selected position is at base'
       : (r.distanceM / 1000).toFixed(2) + ' km · ' + Math.ceil(r.minutes) + ' min walking' +
         (!known ? ' · suit reserve unknown' : r.connectorM > 0.01 ? ' · unverified connection' : ''),
-    nextDistanceM: nextLeg ? nextLeg.distanceM : null,
-    nextName: nextLeg ? nextLeg.to.name : known ? (s.flags.empty ? 'Add a waypoint in the planner' : 'Route complete')
+    nextDistanceM: active ? active.nextDistanceM : nextLeg ? nextLeg.distanceM : null,
+    nextName: active ? active.nextName : nextLeg ? nextLeg.to.name : known ? (s.flags.empty ? 'Add a waypoint in the planner' : 'Route complete')
       : 'Selected position is outside this plan'
   };
 };

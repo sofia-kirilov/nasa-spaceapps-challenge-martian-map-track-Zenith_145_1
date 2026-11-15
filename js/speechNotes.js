@@ -4,6 +4,7 @@ window.ARES = window.ARES || {};
 ARES.createSpeechNotes = function (Recognition, handlers) {
   'use strict';
   var active = null;
+  var offlineNotice = 'Speech recognition unavailable offline — tap to type';
   function finish(session, message) {
     if (active !== session) return;
     active = null;
@@ -23,6 +24,7 @@ ARES.createSpeechNotes = function (Recognition, handlers) {
   }
   function start(key) {
     if (!Recognition || active) return false;
+    if (navigator.onLine === false) { handlers.state(false, offlineNotice); return false; }
     var session;
     try {
       session = { key: key, engine: new Recognition() };
@@ -46,9 +48,10 @@ ARES.createSpeechNotes = function (Recognition, handlers) {
           'service-not-allowed': 'Speech service unavailable. Type your note instead.',
           'audio-capture': 'No microphone available. Type your note instead.',
           'no-speech': 'No speech detected. Try again or type your note.',
-          'network': 'Speech service needs a connection. Type your note offline.'
+          'network': offlineNotice
         };
         finish(session, messages[event.error] || 'Dictation stopped. Your draft is kept.');
+        try { engine.abort(); } catch (error) { /* service already stopped */ }
       };
       engine.onend = function () { finish(session, 'Dictation finished. Review the text, then save your log.'); };
       active = session;
@@ -56,7 +59,8 @@ ARES.createSpeechNotes = function (Recognition, handlers) {
       engine.start();
       return true;
     } catch (error) {
-      if (session) finish(session, 'Could not start dictation. Type your note instead.');
+      if (session) finish(session, navigator.onLine === false || error.name === 'NetworkError'
+        ? offlineNotice : 'Could not start dictation. Type your note instead.');
       else handlers.state(false, 'Speech recognition is unavailable. Type your note instead.');
       return false;
     }

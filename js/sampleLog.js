@@ -24,6 +24,7 @@ ARES.createSampleLog = function () {
       $('saveSample').disabled = listening;
       select.disabled = listening;
       $('speechStatus').textContent = message;
+      $('typeSample').hidden = message.indexOf('tap to type') < 0;
       $('speechStatus').classList.toggle('listening', listening);
       if (!listening) $('speechInterim').textContent = '';
     },
@@ -89,7 +90,26 @@ ARES.createSampleLog = function () {
       time.textContent = new Date(n.createdAt).toLocaleString();
       var text = document.createElement('p');
       text.textContent = n.text;
-      item.append(time, text);
+      var heading = document.createElement('div');
+      heading.className = 'sample-log-heading';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'delete-sample';
+      remove.textContent = 'Delete';
+      remove.setAttribute('aria-label', 'Delete sample log at ' + n.waypoint.name + ' from ' + time.textContent);
+      remove.addEventListener('click', function () {
+        var next = notes.filter(function (note) { return note !== n; });
+        if (!store.write('sampleLogs', next)) {
+          $('speechStatus').textContent = 'Could not delete this log locally. Your saved log is kept. Try again when storage is available.';
+          return;
+        }
+        notes = next;
+        drawNotes();
+        $('speechStatus').textContent = 'Sample log deleted from this device.';
+        $('saveSample').focus({ preventScroll: true });
+      });
+      heading.append(time, remove);
+      item.append(heading, text);
       list.append(item);
     });
   }
@@ -102,6 +122,7 @@ ARES.createSampleLog = function () {
     'Ready to dictate. Your browser may send audio to its speech service and require a connection. Typed logs work offline.';
   $('startDictation').addEventListener('click', function () { speech.start(selected); });
   $('stopDictation').addEventListener('click', speech.stop);
+  $('typeSample').addEventListener('click', function () { input.focus(); });
   $('saveSample').addEventListener('click', function () {
     var text = input.value.trim();
     if (!text) { $('speechStatus').textContent = 'Enter or dictate an observation before saving.'; input.focus(); return; }
