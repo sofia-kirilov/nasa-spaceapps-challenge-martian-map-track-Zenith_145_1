@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101719">
+  <title>ARES / Marswalk Mission Planner</title>
+  <link rel="stylesheet" href="assets/vendor/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header>
+  <a class="brand" href="index.html"><span class="brand-icon">△</span> ARES<span class="brand-sub">SURFACE OPERATIONS</span></a>
+  <nav>
+    <span class="active">EVA PLANNER</span>
+    <a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener">MARS TREK ↗</a>
+  </nav>
+  <div class="mission-id">JEZERO CRATER · THREE FORKS</div>
+</header>
+
+<main>
+  <section class="heading">
+    <div>
+      <div class="eyebrow">NASA SPACE APPS 2026 <span>/</span> MARTIAN MAP</div>
+      <h1>Your next steps.<br><em>On another world.</em></h1>
+      <p id="scienceGoal"></p>
+    </div>
+    <div class="mission-stamp">PLANNING TOOL · NOT FLIGHT SOFTWARE
+      <small>Map, terrain and images are NASA / USGS data.<br>Walking speed and suit limits are our assumptions.</small>
+    </div>
+  </section>
+
+  <!-- Conditions: filled by app.js from live NASA feeds. -->
+  <section class="conditions" id="conditions" aria-label="Site conditions"></section>
+
+  <section class="crew-toolbar panel" aria-label="Crew controls">
+    <div>
+      <div class="eyebrow">CREW ACCESS</div>
+      <button id="gloveToggle" type="button" aria-pressed="false">Glove-Friendly UI: OFF</button>
+    </div>
+    <p id="offlineStatus" role="status">Preparing local map and waypoint cache…</p>
+  </section>
+
+  <section class="rtb-panel" aria-label="Emergency return to base">
+    <div class="rtb-position">
+      <label for="crewPosition">CREW POSITION · MANUAL</label>
+      <select id="crewPosition" aria-describedby="positionNote"></select>
+      <p id="positionNote">Defaults to the planned endpoint. Select your actual waypoint; no live position tracking.</p>
+    </div>
+    <button id="emergencyRTB" type="button">EMERGENCY RTB <span>(Return to Base)</span></button>
+    <div id="rtbStatus" role="status">Compute the fastest walking route to the habitat on the recorded rover traverse.</div>
+    <button id="dismissRTB" type="button" hidden>Dismiss return overlay</button>
+  </section>
+
+  <section class="workspace">
+    <aside class="layers panel">
+      <div class="panel-title"><h2>Map layers</h2></div>
+      <p class="muted">Stack the data. Slide to blend.</p>
+      <div id="layerControls"></div>
+      <div class="legend">
+        <span><i class="swatch tilt-ok"></i> Rover stop, tilt under 10°</span>
+        <span><i class="swatch tilt-caution"></i> Tilt 10° to 15°</span>
+        <span><i class="swatch tilt-steep"></i> Tilt over 15°</span>
+      </div>
+      <div class="source-note">
+        <span>WHERE THE DATA COMES FROM</span>
+        <p>Tiles: NASA Mars Trek. Rover stops: Perseverance waypoints, sols 13 to 719. Geology: USGS global geologic map.</p>
+        <a href="README.md" target="_blank" rel="noopener">Sources and method ↗</a>
+      </div>
+    </aside>
+
+    <section class="map-panel">
+      <div class="map-top">
+        <div>JEZERO / WESTERN DELTA</div>
+        <button id="resetView" type="button">⌖ Recenter</button>
+      </div>
+      <div id="mapWrap">
+        <div id="map" aria-label="Map of the Jezero delta front. Click a numbered marker to inspect a science stop."></div>
+        <div class="map-hint" id="mapHint" aria-live="polite"></div>
+        <div class="map-readout" id="readout"></div>
+      </div>
+      <div class="profile">
+        <div class="profile-title">ELEVATION ALONG ROUTE <span>measured by Perseverance</span></div>
+        <canvas id="profile"></canvas>
+      </div>
+    </section>
+
+    <aside class="planner panel">
+      <div class="panel-title"><h2>EVA plan</h2><span class="tag" id="verdict">DRAFT</span></div>
+      <div class="route-summary">
+        <strong id="distance">0.00 <small>km</small></strong>
+        <div>PLANNED DISTANCE<br><span id="duration"></span></div>
+      </div>
+      <div class="route-actions">
+        <button id="addMode" class="primary" type="button" aria-pressed="false">＋ Add waypoint</button>
+        <button id="returnHome" type="button">⌂ Return</button>
+      </div>
+      <div class="plan-label">ROUTE <span id="pointCount"></span></div>
+      <ol id="routeList"></ol>
+      <div class="small-actions">
+        <button id="undo" type="button">↶ Undo</button>
+        <button id="clear" type="button">Clear</button>
+        <button id="demo" type="button">Load example</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="budget-title">SUIT RESERVES <span id="reserveNote"></span></div>
+      <div id="budgets"></div>
+      <div id="alerts" aria-live="polite"></div>
+      <button class="export" id="export" type="button">↓ Export plan (JSON)</button>
+    </aside>
+  </section>
+
+  <section id="sampling" class="sampling panel" aria-labelledby="samplingTitle">
+    <div class="panel-title"><h2 id="samplingTitle">Geological sample log</h2><span id="sampleCount" class="tag">0 logs</span></div>
+    <div class="sample-grid">
+      <div>
+        <label for="sampleWaypoint">SAMPLING WAYPOINT</label>
+        <select id="sampleWaypoint"></select>
+        <p id="sampleLocation" class="drawer-meta"></p>
+        <div class="dictation-actions">
+          <button id="startDictation" type="button">Start voice note</button>
+          <button id="stopDictation" type="button" disabled>Stop dictation</button>
+        </div>
+        <p id="speechStatus" role="status"></p>
+        <p id="speechInterim" aria-live="off"></p>
+        <label for="sampleText">OBSERVATIONS · REVIEW BEFORE SAVING</label>
+        <textarea id="sampleText" rows="5" placeholder="Rock texture, bedding, sample ID, collection method…" aria-describedby="sampleHelp"></textarea>
+        <p id="sampleHelp" class="muted">Text drafts and timestamped logs stay on this device and are included in the plan export. Audio is transcribed, not recorded.</p>
+        <button id="saveSample" class="primary" type="button">Save sample log</button>
+      </div>
+      <ol id="sampleLogs" aria-label="Saved logs for the selected waypoint"></ol>
+    </div>
+  </section>
+
+  <section class="targets">
+    <div class="section-title">
+      <div class="eyebrow">FOLLOW THE SCIENCE</div>
+      <h2>Where Perseverance drilled. Where you go next.</h2>
+    </div>
+    <div id="targetCards"></div>
+  </section>
+
+  <footer>
+    <span>ARES / TEAM ZENITH</span>
+    <span>NASA SPACE APPS 2026 CONCEPT · EDUCATIONAL USE</span>
+    <a href="README.md">Sources and method ↗</a>
+  </footer>
+</main>
+
+<dialog id="inspection">
+  <button id="closeDrawer" type="button" aria-label="Close">×</button>
+  <div id="drawerContent"></div>
+</dialog>
+
+<!-- Order matters: config and data first, then logic, then the UI. -->
+<script src="assets/vendor/leaflet.js"></script>
+<script src="js/offlineAssets.js"></script>
+<script src="js/config.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/roverTraverse.js"></script>
+<script src="js/marsData.js"></script>
+<script src="js/crewRouter.js"></script>
+<script src="js/planner.js"></script>
+<script src="js/nasaApi.js"></script>
+<script src="js/speechNotes.js"></script>
+<script src="js/sampleLog.js"></script>
+<script src="js/app.js"></script>
+<script src="js/solarClock.js"></script>
+<script src="js/solarClock.js"></script>
+</body>
+</html>
