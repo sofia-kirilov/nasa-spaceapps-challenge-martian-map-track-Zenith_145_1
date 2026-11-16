@@ -1,13 +1,16 @@
 /*
- * visorControls.js — running the EVA from the visor, by button or by voice.
+ * visorControls.js — walking the route from the visor, by button or by voice.
  *
- * The visor gets its own Start, Pause and Voice buttons. They press the same
- * controls as the Plan tab (js/navigation.js does the work), so there is one
- * source of truth for where the crew is.
+ * "Arrived" and "Back" move the crew position one stop along the planned route.
+ * There is no position tracking on Mars to do this automatically: the crew
+ * confirms each arrival, by tapping or by saying it.
  *
  * Voice uses the browser's speech recognition and a short fixed command list.
  * Most browsers send the audio to an online service, so it needs a connection;
  * a flight suit would recognise speech on board. Answers are also spoken aloud.
+ *
+ * walk (from app.js): stops() -> planned stops, index() -> current step or null,
+ *                     set(i)  -> move to step i.
  */
 window.ARES = window.ARES || {};
 
@@ -19,9 +22,8 @@ ARES.voiceCommand = (function () {
   var COMMANDS = [
     ['return', ['return to base', 'return to habitat', 'back to base', 'go home', 'take me home', 'abort']],
     ['close', ['close visor', 'close hud', 'close', 'exit']],
-    ['resume', ['resume', 'continue', 'carry on']],
-    ['pause', ['pause', 'hold', 'wait']],
-    ['start', ['start route', 'start', 'begin', 'go']],
+    ['back', ['previous', 'go back', 'back']],
+    ['next', ['arrived', 'arrive', 'next', 'continue', 'start']],
     ['status', ['status', 'report', 'oxygen', 'where am i', 'how far']],
     ['help', ['help', 'commands', 'what can i say']]
   ];
@@ -34,20 +36,24 @@ ARES.voiceCommand = (function () {
     }
     return null;
   }
-  return { parse: parse, HELP: 'Say: start, pause, resume, status, return to base, or close.' };
+  /** Where a step command lands. Returns the new index, or null when it cannot move. */
+  function step(command, index, count) {
+    if (count < 2) return null;
+    if (command === 'next') return index === null ? 0 : index < count - 1 ? index + 1 : null;
+    if (command === 'back') return index !== null && index > 0 ? index - 1 : null;
+    return null;
+  }
+  return { parse: parse, step: step, HELP: 'Say: arrived, back, status, return to base, or close.' };
 })();
 
 /* ---------- Visor buttons, microphone and spoken answers ---------- */
 
-ARES.createVisorControls = function () {
+ARES.createVisorControls = function (walk) {
   'use strict';
   var V = ARES.voiceCommand;
   function $(id) { return document.getElementById(id); }
   var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   var recogniser = null, listening = false;
-
-  function active() { return !$('activeNavigation').hidden; }
-  function running() { return active() && /pause/i.test($('pauseNavigation').textContent); }
 
   function say(text) {
     $('hudVoice').textContent = text;
@@ -56,39 +62,40 @@ ARES.createVisorControls = function () {
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text.replace(/·/g, ',').replace(/O₂/g, 'oxygen')));
   }
 
-  /** The visor's own readouts, as one sentence. */
+  /** The visor's own readouts, as one sentence. Read after app.js has updated them. */
   function report() {
     var next = $('hudDistance').textContent;
     return 'Oxygen ' + $('hudOxygen').textContent + '. Return to base: ' + $('hudReturn').textContent.toLowerCase() +
       ', ' + $('hudReturnNote').textContent + '. ' +
-      (next === '—' || next === '--' ? $('hudWaypoint').textContent + '.' : 'Next: ' + $('hudWaypoint').textContent + ', ' + next + '.');
+      (next === '—' ? $('hudWaypoint').textContent + '.' : 'Next: ' + $('hudWaypoint').textContent + ', ' + next + '.');
   }
 
-  /** Mirror the Plan tab's navigation state into the visor. */
-  function draw() {
-    $('hudStep').textContent = active()
-      ? $('navigationMode').textContent + ' · ' + $('navigationPercent').textContent + ' · ' + $('navigationNext').textContent
-      : $('navigationStatus').textContent;
-    $('hudStart').hidden = active();
-    $('hudStart').disabled = $('startRoute').disabled;
-    $('hudPause').hidden = !active();
-    $('hudPause').textContent = $('pauseNavigation').textContent;
+  function drawStep() {
+    var stops = walk.stops(), index = walk.index();
+    $('hudStep').textContent = stops.length < 2 ? 'No route loaded'
+      : index === null ? 'Not started · ' + (stops.length - 1) + ' legs'
+      : 'Stop ' + (index + 1) + ' of ' + stops.length + ' · ' + stops[index].name;
+    $('hudNext').textContent = index === null ? 'Start route' : 'Arrived · next stop';
+    $('hudNext').disabled = V.step('next', index, stops.length) === null;
+    $('hudBack').disabled = V.step('back', index, stops.length) === null;
   }
 
-  function run(command) {
-    if (command === 'start') {
-      if (active()) say('The route is already active. ' + report());
-      else if ($('startRoute').disabled) say('Cannot start. ' + $('navigationStatus').textContent);
-      else { $('startRoute').click(); draw(); say('Route started. ' + report()); }
-    } else if (command === 'pause' || command === 'resume') {
-      if (!active()) say('No route is active. Say start.');
-      else if ((command === 'pause') !== running()) say(command === 'pause' ? 'Already paused.' : 'Already moving.');
-      else { $('pauseNavigation').click(); draw(); say(command === 'pause' ? 'Paused.' : 'Resumed. ' + report()); }
+  function run(command, spoken) {
+    var stops = walk.stops(), index = walk.index();
+    if (command === 'next' || command === 'back') {
+      var target = V.step(command, index, stops.length);
+      if (target === null) {
+        say(stops.length < 2 ? 'No route loaded.' : command === 'next' ? 'Route complete. You are at the last stop.' : 'You are at the first stop.');
+        return;
+      }
+      walk.set(target);
+      drawStep();
+      var text = 'At ' + stops[target].name + '. ' + report();
+      if (spoken) say(text); else $('hudVoice').textContent = text;
     } else if (command === 'status') {
-      say((active() ? $('navigationNext').textContent + ' ' : 'Route not started. ') + report());
+      say(index === null ? 'Route not started. ' + report() : 'At ' + stops[index].name + '. ' + report());
     } else if (command === 'return') {
       $('emergencyRTB').click(); // same action as the red button
-      draw();
       say('Return to base. ' + $('hudReturn').textContent + ', ' + $('hudReturnNote').textContent + '.');
     } else if (command === 'close') {
       say('Closing visor.');
@@ -105,6 +112,7 @@ ARES.createVisorControls = function () {
   }
 
   function listen() {
+    if (navigator.onLine === false) { $('hudVoice').textContent = 'Speech recognition unavailable offline — use the buttons'; return; }
     if (listening) { recogniser.stop(); return; }
     recogniser = new Recognition();
     recogniser.lang = 'en-US';
@@ -114,13 +122,13 @@ ARES.createVisorControls = function () {
       var options = Array.from(event.results[0]).map(function (alt) { return alt.transcript; });
       var command = null;
       options.some(function (text) { command = V.parse(text); return !!command; });
-      if (command) run(command);
+      if (command) run(command, true);
       else say('Heard "' + options[0] + '". ' + V.HELP);
     };
     recogniser.onerror = function (event) {
       $('hudVoice').textContent = event.error === 'not-allowed' || event.error === 'service-not-allowed'
         ? 'Microphone is blocked. Allow it for this site, or use the buttons.'
-        : event.error === 'network' ? 'Speech recognition needs a connection. Use the buttons.'
+        : event.error === 'network' ? 'Speech recognition unavailable offline — use the buttons'
         : event.error === 'no-speech' ? 'Nothing heard. ' + V.HELP
         : 'Voice command failed (' + event.error + '). Use the buttons.';
     };
@@ -137,8 +145,8 @@ ARES.createVisorControls = function () {
     }
   }
 
-  $('hudStart').addEventListener('click', function () { $('startRoute').click(); draw(); });
-  $('hudPause').addEventListener('click', function () { $('pauseNavigation').click(); draw(); });
+  $('hudNext').addEventListener('click', function () { run('next', false); });
+  $('hudBack').addEventListener('click', function () { run('back', false); });
   if (Recognition) {
     $('hudTalk').addEventListener('click', listen);
   } else {
@@ -146,12 +154,13 @@ ARES.createVisorControls = function () {
     $('hudTalk').textContent = 'Voice not supported';
     $('hudVoice').textContent = 'This browser has no speech recognition. Use the buttons.';
   }
-  $('hudView').addEventListener('close', function () {
+  function closeVoice() {
     if (listening) recogniser.stop();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
-  });
-  new MutationObserver(draw).observe(document.querySelector('.navigation-panel'),
-    { childList: true, subtree: true, characterData: true, attributes: true });
-  draw();
-  return { refresh: draw, run: run };
+  }
+  $('hudView').addEventListener('close', closeVoice);
+  $('evaCommands').addEventListener('close', closeVoice);
+  window.addEventListener('ares:planchange', drawStep);
+  drawStep();
+  return { refresh: drawStep, run: run };
 };

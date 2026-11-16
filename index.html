@@ -135,7 +135,7 @@
     </aside>
 
     <section class="map-panel" aria-label="Jezero terrain map">
-      <div class="map-toolbar"><span>Jezero Crater</span><button id="open3d" type="button" aria-haspopup="dialog" aria-controls="terrainView">3D view</button><button id="resetView" type="button">Reset view</button></div>
+      <div class="map-toolbar"><span>Jezero Crater</span><button id="open3d" type="button">3D terrain</button><button id="openCommands" type="button">EVA controls</button><button id="resetView" type="button">Reset view</button></div>
       <p id="mapHint" class="map-hint"></p>
       <div id="mapWrap"><div id="map" aria-label="Interactive Mars map"></div></div>
       <p id="readout" class="map-readout" aria-live="off"></p>
@@ -166,7 +166,7 @@
     <p id="terrainLegend"></p>
   </footer>
 </dialog>
-
+<dialog id="evaCommands" aria-labelledby="commandsTitle"><h2 id="commandsTitle">EVA controls</h2><button id="closeCommands" type="button">Close controls</button><p id="hudStep"></p><div class="eva-command-buttons"><button id="hudBack" type="button">Back one stop</button><button id="hudNext" type="button">Start route</button><button id="hudTalk" type="button" aria-pressed="false">Voice command</button></div><p id="hudVoice" role="status"></p><p>Waypoint commands pause the simulation at the selected stop. Return to base always uses the active simulated position.</p></dialog>
 <dialog id="inspection" aria-label="Science stop inspection">
   <button id="closeDrawer" type="button" aria-label="Close inspection">×</button>
   <div id="drawerContent"></div>
@@ -178,15 +178,6 @@
     <div><h2 id="hudTitle">Visor simulation</h2><p id="hudContext">Plan estimates · simulated position · no live suit feed · background is a placeholder picture, not a live camera</p></div>
     <button id="closeHud" type="button" autofocus>Close HUD View</button>
   </header>
-  <div class="hud-controls">
-    <p id="hudStep"></p>
-    <div class="hud-buttons">
-      <button id="hudStart" type="button">Start route</button>
-      <button id="hudPause" type="button" hidden>Pause simulation</button>
-      <button id="hudTalk" type="button" aria-pressed="false">Voice command</button>
-    </div>
-    <p id="hudVoice" role="status" aria-live="polite"></p>
-  </div>
   <div class="hud-telemetry" role="status" aria-live="polite" aria-atomic="true">
     <div class="hud-reading"><span>O₂ at position · estimate</span><strong id="hudOxygen">--</strong><small id="hudOxygenNote"></small></div>
     <div class="hud-reading"><span>Return to base</span><strong id="hudReturn">--</strong><small id="hudReturnNote"></small></div>
@@ -214,8 +205,6 @@
 <script src="js/roverTraverse.js"></script>
 <script src="js/marsData.js"></script>
 <script src="data/medaJezero.js"></script>
-<script src="data/jezeroElevation.js"></script>
-<script src="js/terrain.js"></script>
 <script src="js/crewRouter.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/navigation.js"></script>
@@ -223,6 +212,8 @@
 <script src="js/speechNotes.js"></script>
 <script src="js/sampleLog.js"></script>
 <script src="js/hud.js"></script>
+<script src="data/jezeroElevation.js"></script>
+<script src="js/terrain.js"></script>
 <script src="js/terrain3d.js"></script>
 <script src="js/visorControls.js"></script>
 <script src="js/app.js"></script>

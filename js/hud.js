@@ -99,7 +99,7 @@ ARES.createHud = function (config, habitat) {
     if (previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
   });
   return {
-    update: function (snapshot) { latest = snapshot; if (view.open) draw(); },
+    update: function (snapshot) { latest = snapshot; draw(); },
     open: function () {
       if (view.open) return;
       previousFocus = document.activeElement;

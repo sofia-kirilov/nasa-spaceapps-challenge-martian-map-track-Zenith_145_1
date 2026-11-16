@@ -409,25 +409,7 @@ summary, select, textarea, .layer-head label { min-width: var(--target-size); }
   .hud-telemetry { position: static; }
 }
 
-/* ---------- Visor: step and voice controls (js/visorControls.js) ---------- */
-.hud-controls { position: relative; width: min(520px, calc(100% - 330px)); margin-top: 12px; padding: 12px 14px; background: #03121beb; border-left: 2px solid #adfaff; }
-.hud-controls p { margin: 0; color: #d0eff4; font: 16px/1.5 var(--mono); overflow-wrap: anywhere; }
-#hudStep { color: #adfaff; font-weight: 600; }
-#hudVoice:empty { display: none; }
-.hud-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.hud-buttons button { flex: 1 1 140px; background: #03121bf2; color: #d9fcff; border: 1px solid #adfaff; }
-.hud-buttons button:disabled { opacity: .45; }
-#hudStart:not(:disabled), #hudTalk[aria-pressed="true"] { background: #adfaff; color: #03121b; font-weight: 600; }
-@media (max-width: 900px) {
-  .hud-controls { width: calc(100% - 320px); }
-}
-@media (max-width: 700px) {
-  .hud-controls { width: auto; }
-}
-
-/* ---------- 3D terrain view (js/terrain3d.js) ---------- */
-.map-toolbar { gap: 8px; }
-.map-toolbar span { margin-right: auto; }
+/* Additive terrain dialog; existing planner and HUD styling is preserved. */
 .terrain-view { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; padding: 0; border: 0; background: #05090d; color: var(--text); }
 .terrain-view[open] { display: flex; flex-direction: column; }
 .terrain-view::backdrop { background: #05090d; }
@@ -444,3 +426,7 @@ summary, select, textarea, .layer-head label { min-width: var(--target-size); }
   .terrain-header p { display: none; } /* the caveat stays in the legend line below */
   .terrain-buttons button { flex-basis: 40%; }
 }
+
+.eva-command-buttons { display:grid; gap:12px; margin-block:20px; }
+.map-toolbar { flex-wrap:wrap; }
+@media(max-width:700px){ .map-toolbar > span { display:none; } .map-toolbar button { flex:1; } }

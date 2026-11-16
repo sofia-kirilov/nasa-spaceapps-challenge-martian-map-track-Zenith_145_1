@@ -20,15 +20,14 @@
   var crewRouter = ARES.createCrewRouter(config, waypoints);
   var offline = ARES.offline;
   var sampleLog;
+  var terrain = ARES.elevationGrid ? ARES.createTerrain(ARES.elevationGrid) : null;
+  var terrainView, visorControls;
   var navigation = ARES.createNavigation(config, waypoints);
   var navigationLayer;
   var positionMarker;
   var lastTick = Date.now();
   var returnRoute = null;
   var hud = ARES.createHud(config, data.habitat);
-  // Measured elevation grid (data/jezeroElevation.js): slope layer, readout and 3D view.
-  var terrain = ARES.elevationGrid && ARES.createTerrain ? ARES.createTerrain(ARES.elevationGrid) : null;
-  var terrainView = null;
   var savedMap = offline.read('map', {});
   if (!savedMap || typeof savedMap !== 'object') savedMap = {};
   var savedLayers = offline.read('layers', {});
@@ -208,7 +207,6 @@
         rover.eachLayer(function (layer) { layer.setStyle({ opacity: value * 0.7, fillOpacity: value }); });
       }
     });
-
     if (terrain) {
       var slope = createSlopeLayer();
       addLayerControl({
@@ -283,14 +281,13 @@
         addStop({ name: 'Waypoint ' + (customCount + 1), lat: lat, lon: lon, stopMin: 0, custom: true });
         return;
       }
-      // Terrain comes from the bundled grid straight away; geology needs the network.
       var ground = terrainText(lat, lon);
-      var prefix = ground ? 'Ground here: ' + ground + '. ' : '';
-      setHint(prefix + 'Looking up geology…');
+      if (ground) $('readout').textContent = ground;
+      setHint('Looking up geology…');
       api.geologyAt(lat, lon).then(function (unit) {
-        setHint(prefix + (unit ? 'USGS geologic unit: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.'));
+        setHint(unit ? 'USGS geologic unit here: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.');
       }).catch(function () {
-        setHint(prefix + 'Geology lookup failed. Check the connection and tap again.');
+        setHint('Geology lookup failed. Check the connection and tap again.');
       });
     });
 
@@ -310,7 +307,6 @@
     hud.update({ stops: state.stops, summary: state.summary, position: position,
       routeIndex: active ? active.routeIndex : 0, navigation: active,
       returnRoute: crewRouter.fastestReturn(position, habitat) });
-    if (terrainView) terrainView.redraw(); // no-op unless the 3D view is open
   }
 
   function drawReturn() {
@@ -411,6 +407,8 @@
       setSuit('Suit oxygen 100% · at habitat', false);
     }
     updateHud();
+    if (visorControls) visorControls.refresh();
+    if (terrainView) terrainView.redraw();
     if (persist !== false) offline.write('navigation', navigation.export());
   }
 
@@ -954,30 +952,40 @@
     } else if (saved) {
       $('navigationStatus').textContent = 'The saved simulation no longer matches the current route or data. Review your plan and start again.';
     }
-
-    // Visor Start, Pause and voice commands (js/visorControls.js) press the Plan tab's own controls.
-    if (ARES.createVisorControls && $('hudTalk')) ARES.createVisorControls();
-
-    // 3D terrain (js/terrain3d.js), drawn from the same elevation grid as the slope layer.
-    if (terrain && ARES.createTerrainView && $('open3d')) {
+    if (ARES.createVisorControls) visorControls = ARES.createVisorControls({
+      stops: function () { var active = navigation.snapshot(); return active && active.mode === 'return' ? [habitat] : state.stops; },
+      index: function () { var active = navigation.snapshot(); return active ? Math.max(0, active.routeIndex) : null; },
+      set: function (index) {
+        if (!navigation.snapshot()) $('startRoute').click();
+        var active = navigation.snapshot();
+        if (!active || active.mode === 'return') return;
+        var saved = navigation.export(), elapsed = 0;
+        for (var i = 0; i < saved.steps.length; i++) {
+          var step = saved.steps[i];
+          if (index === 0 || (step.routeIndex >= index && step.phase !== 'walking')) break;
+          elapsed += step.minutes;
+        }
+        navigation.seek(index === state.stops.length - 1 ? saved.totalMin : elapsed);
+        if (!navigation.snapshot().paused) navigation.togglePause();
+        updateNavigation();
+      }
+    });
+    if (terrain) {
       terrainView = ARES.createTerrainView(terrain, {
-        limits: { cautionDeg: config.slope.cautionDeg, limitDeg: config.slope.limitDeg },
+        limits: config.slope,
         getScene: function () {
-          var path = [];
-          (state.summary ? state.summary.legs : []).forEach(function (leg) { path = path.concat(leg.points); });
-          var stops = data.targets.map(function (t) { return { lat: t.lat, lon: t.lon, label: String(Number(t.id)) }; })
-            .concat(state.stops.filter(function (s) { return s.custom; }).map(function (s) { return { lat: s.lat, lon: s.lon, label: 'W' }; }));
-          return { path: path, stops: stops, habitat: habitat,
-            position: (navigation.snapshot() || {}).position || null };
+          var active = navigation.snapshot(), points = [];
+          state.summary.legs.forEach(function (leg) { points = points.concat(leg.points); });
+          if (active && active.mode === 'return' && returnRoute) points = returnRoute.points;
+          return { path: points, stops: data.targets.map(function (t) { return {lat:t.lat,lon:t.lon,label:String(Number(t.id))}; })
+            .concat(state.stops.filter(function(s){return s.custom;}).map(function(s){return {lat:s.lat,lon:s.lon,label:'W'};})),
+            habitat: habitat, position: active ? active.position : null };
         }
       });
-      $('open3d').addEventListener('click', function () {
-        if (state.adding) $('addMode').click();
-        terrainView.open();
-      });
-    } else if ($('open3d')) {
-      $('open3d').hidden = true;
+      $('open3d').addEventListener('click', function () { terrainView.open(); });
     }
+    $('openCommands').addEventListener('click', function () { updateHud(); $('evaCommands').showModal(); });
+    $('closeCommands').addEventListener('click', function () { $('evaCommands').close(); });
 
   }
 
