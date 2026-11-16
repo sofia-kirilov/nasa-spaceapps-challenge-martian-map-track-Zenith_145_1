@@ -51,6 +51,26 @@ The original planner follows the recorded rover graph between snapped stops and 
 
 The source files retain their dataset identifiers, exact positions and provenance. Primary services include [NASA Mars Trek](https://trek.nasa.gov/mars/), the [Perseverance waypoint feed](https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json), the [USGS global geologic map](https://pubs.usgs.gov/publication/sim3464), and [Perseverance raw images](https://mars.nasa.gov/mars2020/multimedia/raw-images/). Consult the current source files for the precise products, retrieval metadata and model assumptions.
 
+## Terrain: slope layer and 3D view
+
+`data/jezeroElevation.js` holds a 4.5 km square of the USGS / NASA CTX elevation model (Mars 2020 TRN CTX DTM mosaic, 20 m per pixel, averaged to 40 m cells) centred on the habitat. The file header gives the source file, the pixel window and the method.
+
+- **Check against the rover:** `node tests/terrain-tests.js` compares the grid with the elevation Perseverance measured at each of its stops inside the area. On 169 stops the mean difference is 0.3 m and the mean absolute difference 2.0 m.
+- **Slope guidance layer** (Layers tab): yellow from 10°, orange from the caution angle, red from the suit slope limit.
+- **Map readout:** tapping the map gives the model's elevation and slope there, before the geology lookup returns.
+- **3D view** (button on the map): the same grid as a surface you can rotate, tilt and zoom, coloured by elevation or by slope, with the route, stops, habitat and the simulated crew position on it. Drawn on a plain canvas by `js/terrain3d.js`; no 3D library.
+- **Limits:** 40 m cells cannot show rocks, ledges or small scarps, so this is terrain guidance and not a hazard map. The route check itself still uses rover-measured slope along the rover's path; it does not yet route around steep cells.
+
+## Visor: start, pause and voice
+
+The visor has its own **Start route** and **Pause / Resume** buttons, which press the same controls as the Plan tab, and a line showing the navigation status. Position comes from the simulation in `js/navigation.js`.
+
+**Voice command** listens for one short phrase from a fixed list: "start", "pause", "resume", "status", "return to base", "close". The visor shows and speaks the answer. Speech recognition is the browser's own; in most browsers it needs an internet connection and it is not available in Firefox, in which case the button says so and the buttons still work. A flight suit would recognise speech on board. `js/visorControls.js` holds the command list.
+
+## Archived Perseverance weather
+
+`data/medaJezero.js` holds seven sols (1853 to 1859, May 2026) of Perseverance MEDA readings from the NASA PDS Atmospheres Node: air temperature, ground temperature and pressure, each as a daily range. NASA has no live MEDA feed; the archive is updated about three times a year. The file header lists the exact source files and how the ranges were computed. By these sols the rover was on higher ground toward Jezero's western rim, so the Conditions tab labels the readings "Jezero area, western rim" and "not live". The Curiosity fallback is labelled "Gale Crater weather · not Jezero".
+
 ## Checks
 
 With Node.js installed, run:

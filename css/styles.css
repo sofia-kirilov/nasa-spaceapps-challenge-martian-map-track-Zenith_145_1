@@ -408,3 +408,39 @@ summary, select, textarea, .layer-head label { min-width: var(--target-size); }
   .hud-map { position: static; width: min(100%, 280px); margin-left: auto; }
   .hud-telemetry { position: static; }
 }
+
+/* ---------- Visor: step and voice controls (js/visorControls.js) ---------- */
+.hud-controls { position: relative; width: min(520px, calc(100% - 330px)); margin-top: 12px; padding: 12px 14px; background: #03121beb; border-left: 2px solid #adfaff; }
+.hud-controls p { margin: 0; color: #d0eff4; font: 16px/1.5 var(--mono); overflow-wrap: anywhere; }
+#hudStep { color: #adfaff; font-weight: 600; }
+#hudVoice:empty { display: none; }
+.hud-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.hud-buttons button { flex: 1 1 140px; background: #03121bf2; color: #d9fcff; border: 1px solid #adfaff; }
+.hud-buttons button:disabled { opacity: .45; }
+#hudStart:not(:disabled), #hudTalk[aria-pressed="true"] { background: #adfaff; color: #03121b; font-weight: 600; }
+@media (max-width: 900px) {
+  .hud-controls { width: calc(100% - 320px); }
+}
+@media (max-width: 700px) {
+  .hud-controls { width: auto; }
+}
+
+/* ---------- 3D terrain view (js/terrain3d.js) ---------- */
+.map-toolbar { gap: 8px; }
+.map-toolbar span { margin-right: auto; }
+.terrain-view { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none; padding: 0; border: 0; background: #05090d; color: var(--text); }
+.terrain-view[open] { display: flex; flex-direction: column; }
+.terrain-view::backdrop { background: #05090d; }
+.terrain-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: max(14px, env(safe-area-inset-top)) 18px 12px; border-bottom: 1px solid var(--line); }
+.terrain-header h2 { margin: 0 0 4px; font: 600 20px/1.4 var(--mono); color: var(--accent); }
+.terrain-header p, .terrain-controls p { margin: 0; color: var(--muted); max-width: 76ch; }
+#closeTerrain { flex: none; }
+#terrainCanvas { flex: 1 1 0; min-height: 0; width: 100%; touch-action: none; cursor: grab; background: radial-gradient(ellipse at 50% 30%, #1a120d 0%, #05090d 75%); }
+#terrainCanvas:active { cursor: grabbing; }
+.terrain-controls { padding: 12px 18px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.terrain-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.terrain-buttons button { flex: 1 1 120px; }
+@media (max-width: 700px) {
+  .terrain-header p { display: none; } /* the caveat stays in the legend line below */
+  .terrain-buttons button { flex-basis: 40%; }
+}

@@ -26,6 +26,9 @@
   var lastTick = Date.now();
   var returnRoute = null;
   var hud = ARES.createHud(config, data.habitat);
+  // Measured elevation grid (data/jezeroElevation.js): slope layer, readout and 3D view.
+  var terrain = ARES.elevationGrid && ARES.createTerrain ? ARES.createTerrain(ARES.elevationGrid) : null;
+  var terrainView = null;
   var savedMap = offline.read('map', {});
   if (!savedMap || typeof savedMap !== 'object') savedMap = {};
   var savedLayers = offline.read('layers', {});
@@ -205,6 +208,43 @@
         rover.eachLayer(function (layer) { layer.setStyle({ opacity: value * 0.7, fillOpacity: value }); });
       }
     });
+
+    if (terrain) {
+      var slope = createSlopeLayer();
+      addLayerControl({
+        key: 'slope', name: 'Slope guidance', on: true, opacity: 45,
+        detail: 'USGS CTX elevation, 40 m cells · yellow 10°+, orange ' + config.slope.cautionDeg + '°+, red ' +
+          config.slope.limitDeg + '°+ · rocks and ledges not resolved',
+        setVisible: function (on) { if (on) slope.addTo(map); else map.removeLayer(slope); },
+        setOpacity: function (value) { slope.setOpacity(value); }
+      });
+    }
+  }
+
+  /** Steep ground from the elevation grid, as a transparent picture laid over the map. */
+  function createSlopeLayer() {
+    var n = terrain.size;
+    var canvas = document.createElement('canvas');
+    canvas.width = canvas.height = n;
+    var ctx = canvas.getContext('2d');
+    var image = ctx.createImageData(n, n);
+    for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) {
+      var slope = terrain.slopeCell(i, j);
+      var rgb = slope >= config.slope.limitDeg ? [255, 92, 77] : slope >= config.slope.cautionDeg ? [237, 150, 120]
+        : slope >= 10 ? [232, 184, 74] : null;
+      var k = (i * n + j) * 4;
+      if (rgb) { image.data[k] = rgb[0]; image.data[k + 1] = rgb[1]; image.data[k + 2] = rgb[2]; image.data[k + 3] = 215; }
+    }
+    ctx.putImageData(image, 0, 0);
+    var b = terrain.bounds;
+    return L.imageOverlay(canvas.toDataURL(), [[b.south, b.west], [b.north, b.east]], { interactive: false, zIndex: 250 });
+  }
+
+  /** Elevation and slope from the grid for the readout, or '' outside it. */
+  function terrainText(lat, lon) {
+    if (!terrain) return '';
+    var height = terrain.elevationAt(lat, lon), slope = terrain.slopeAt(lat, lon);
+    return height === null || slope === null ? '' : 'CTX model ' + height.toFixed(0) + ' m, slope ' + slope.toFixed(0) + '°';
   }
 
   function setHint(text) { $('mapHint').textContent = text; }
@@ -230,6 +270,8 @@
       } else {
         text += ' · no rover measurement here';
       }
+      var ground = terrainText(point.lat, point.lon);
+      if (ground) text += ' · ' + ground;
       $('readout').textContent = text;
     });
 
@@ -241,11 +283,14 @@
         addStop({ name: 'Waypoint ' + (customCount + 1), lat: lat, lon: lon, stopMin: 0, custom: true });
         return;
       }
-      setHint('Looking up geology…');
+      // Terrain comes from the bundled grid straight away; geology needs the network.
+      var ground = terrainText(lat, lon);
+      var prefix = ground ? 'Ground here: ' + ground + '. ' : '';
+      setHint(prefix + 'Looking up geology…');
       api.geologyAt(lat, lon).then(function (unit) {
-        setHint(unit ? 'USGS geologic unit here: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.');
+        setHint(prefix + (unit ? 'USGS geologic unit: ' + unit.unit + ', ' + unit.description : 'No geologic unit mapped here.'));
       }).catch(function () {
-        setHint('Geology lookup failed. Check the connection and tap again.');
+        setHint(prefix + 'Geology lookup failed. Check the connection and tap again.');
       });
     });
 
@@ -265,6 +310,7 @@
     hud.update({ stops: state.stops, summary: state.summary, position: position,
       routeIndex: active ? active.routeIndex : 0, navigation: active,
       returnRoute: crewRouter.fastestReturn(position, habitat) });
+    if (terrainView) terrainView.redraw(); // no-op unless the 3D view is open
   }
 
   function drawReturn() {
@@ -908,6 +954,31 @@
     } else if (saved) {
       $('navigationStatus').textContent = 'The saved simulation no longer matches the current route or data. Review your plan and start again.';
     }
+
+    // Visor Start, Pause and voice commands (js/visorControls.js) press the Plan tab's own controls.
+    if (ARES.createVisorControls && $('hudTalk')) ARES.createVisorControls();
+
+    // 3D terrain (js/terrain3d.js), drawn from the same elevation grid as the slope layer.
+    if (terrain && ARES.createTerrainView && $('open3d')) {
+      terrainView = ARES.createTerrainView(terrain, {
+        limits: { cautionDeg: config.slope.cautionDeg, limitDeg: config.slope.limitDeg },
+        getScene: function () {
+          var path = [];
+          (state.summary ? state.summary.legs : []).forEach(function (leg) { path = path.concat(leg.points); });
+          var stops = data.targets.map(function (t) { return { lat: t.lat, lon: t.lon, label: String(Number(t.id)) }; })
+            .concat(state.stops.filter(function (s) { return s.custom; }).map(function (s) { return { lat: s.lat, lon: s.lon, label: 'W' }; }));
+          return { path: path, stops: stops, habitat: habitat,
+            position: (navigation.snapshot() || {}).position || null };
+        }
+      });
+      $('open3d').addEventListener('click', function () {
+        if (state.adding) $('addMode').click();
+        terrainView.open();
+      });
+    } else if ($('open3d')) {
+      $('open3d').hidden = true;
+    }
+
   }
 
   start();

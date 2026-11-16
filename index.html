@@ -135,13 +135,37 @@
     </aside>
 
     <section class="map-panel" aria-label="Jezero terrain map">
-      <div class="map-toolbar"><span>Jezero Crater</span><button id="resetView" type="button">Reset view</button></div>
+      <div class="map-toolbar"><span>Jezero Crater</span><button id="open3d" type="button" aria-haspopup="dialog" aria-controls="terrainView">3D view</button><button id="resetView" type="button">Reset view</button></div>
       <p id="mapHint" class="map-hint"></p>
       <div id="mapWrap"><div id="map" aria-label="Interactive Mars map"></div></div>
       <p id="readout" class="map-readout" aria-live="off"></p>
     </section>
   </section>
 </main>
+
+<dialog id="terrainView" class="terrain-view" aria-labelledby="terrainTitle" aria-describedby="terrainNote">
+  <header class="terrain-header">
+    <div>
+      <h2 id="terrainTitle">3D terrain · Jezero delta front</h2>
+      <p id="terrainNote">USGS / NASA CTX elevation model, 40 m cells, 4.5 km across. Drag to rotate and tilt. Terrain guidance only: rocks and small ledges are not resolved.</p>
+    </div>
+    <button id="closeTerrain" type="button" autofocus>Close 3D view</button>
+  </header>
+  <canvas id="terrainCanvas" aria-label="Three-dimensional terrain with the planned route, science stops and habitat"></canvas>
+  <footer class="terrain-controls">
+    <div class="terrain-buttons" role="group" aria-label="3D view controls">
+      <button id="terrainLeft" type="button">Rotate left</button>
+      <button id="terrainRight" type="button">Rotate right</button>
+      <button id="terrainUp" type="button">Tilt up</button>
+      <button id="terrainDown" type="button">Tilt down</button>
+      <button id="terrainIn" type="button">Zoom in</button>
+      <button id="terrainOut" type="button">Zoom out</button>
+      <button id="terrainHeight" type="button">Height ×2</button>
+      <button id="terrainColour" type="button">Show slope</button>
+    </div>
+    <p id="terrainLegend"></p>
+  </footer>
+</dialog>
 
 <dialog id="inspection" aria-label="Science stop inspection">
   <button id="closeDrawer" type="button" aria-label="Close inspection">×</button>
@@ -154,6 +178,15 @@
     <div><h2 id="hudTitle">Visor simulation</h2><p id="hudContext">Plan estimates · simulated position · no live suit feed · background is a placeholder picture, not a live camera</p></div>
     <button id="closeHud" type="button" autofocus>Close HUD View</button>
   </header>
+  <div class="hud-controls">
+    <p id="hudStep"></p>
+    <div class="hud-buttons">
+      <button id="hudStart" type="button">Start route</button>
+      <button id="hudPause" type="button" hidden>Pause simulation</button>
+      <button id="hudTalk" type="button" aria-pressed="false">Voice command</button>
+    </div>
+    <p id="hudVoice" role="status" aria-live="polite"></p>
+  </div>
   <div class="hud-telemetry" role="status" aria-live="polite" aria-atomic="true">
     <div class="hud-reading"><span>O₂ at position · estimate</span><strong id="hudOxygen">--</strong><small id="hudOxygenNote"></small></div>
     <div class="hud-reading"><span>Return to base</span><strong id="hudReturn">--</strong><small id="hudReturnNote"></small></div>
@@ -181,6 +214,8 @@
 <script src="js/roverTraverse.js"></script>
 <script src="js/marsData.js"></script>
 <script src="data/medaJezero.js"></script>
+<script src="data/jezeroElevation.js"></script>
+<script src="js/terrain.js"></script>
 <script src="js/crewRouter.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/navigation.js"></script>
@@ -188,6 +223,8 @@
 <script src="js/speechNotes.js"></script>
 <script src="js/sampleLog.js"></script>
 <script src="js/hud.js"></script>
+<script src="js/terrain3d.js"></script>
+<script src="js/visorControls.js"></script>
 <script src="js/app.js"></script>
 <script src="js/solarClock.js"></script>
 <script src="js/panels.js"></script>
